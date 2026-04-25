@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boba Roguelike</title>
+    <script src="vendor/phaser.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            overflow-y: hidden;
+            background-color: #0a0a0f;
+        }
+        body {
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #game-root {
+            width: 100vw;
+            height: 100dvh;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            max-width: 100vw;
+            max-height: 100dvh;
+            margin: 0 auto;
+        }
+        #boot-status {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            color: #fff4d6;
+            font-family: Arial, sans-serif;
+            font-weight: 800;
+            letter-spacing: 1px;
+            background: #0a0a0f;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-root"></div>
+    <div id="boot-status">LOADING BOBA ROGUELIKE...</div>
+    <script src="js/GameState.js"></script>
+    <script>
+        (function () {
+            var bootStatus = document.getElementById('boot-status');
+
+            function setBootStatus(message) {
+                if (bootStatus) {
+                    bootStatus.textContent = message;
+                }
+            }
+
+            window.addEventListener('error', function (event) {
+                setBootStatus('BOOT ERROR: ' + (event.message || 'CHECK CONSOLE'));
+            });
+
+            function loadScript(src, done) {
+                var script = document.createElement('script');
+                script.src = src;
+                script.onload = done;
+                script.onerror = function () {
+                    setBootStatus('FAILED TO LOAD ' + src);
+                    if (done) done();
+                };
+                document.body.appendChild(script);
+            }
+
+            function loadGame() {
+                setBootStatus('STARTING GAME...');
+                loadScript('js/game.js?v=70');
+            }
+
+            setBootStatus('LOADING EMBEDDED ASSETS...');
+            loadScript('js/embedded-assets.js?v=3', loadGame);
+        }());
+    </script>
+
+</body>
+</html>
