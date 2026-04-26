@@ -4,13 +4,87 @@ const GAME_WIDTH = 1000;
 const GAME_HEIGHT = 700;
 const GAME_CENTER_X = GAME_WIDTH / 2;
 const GAME_CENTER_Y = GAME_HEIGHT / 2;
+const CAMPAIGN_BASE_SOUL_TARGET = 100000;
+const CAMPAIGN_SOUL_SCALE = 5;
+
+const CAMPAIGN_LOCATIONS = [
+    { id: 'america', name: 'America', shortName: 'USA', x: 150, y: 382, accent: 0x6fb7ff, boss: 'Cupzilla Prime' },
+    { id: 'brazil', name: 'Brazil', shortName: 'BRA', x: 280, y: 496, accent: 0x64d970, boss: 'Carnival Shaker' },
+    { id: 'egypt', name: 'Egypt', shortName: 'EGY', x: 510, y: 398, accent: 0xf3c35c, boss: 'Pharaoh Tapioca' },
+    { id: 'india', name: 'India', shortName: 'IND', x: 665, y: 420, accent: 0xff9f66, boss: 'Masala Monarch' },
+    { id: 'taiwan', name: 'Taiwan', shortName: 'TWN', x: 798, y: 372, accent: 0xd98bff, boss: 'Pearl Empress' }
+];
+
+function getCampaignLocation(index = GameState.campaignLocationIndex) {
+    return CAMPAIGN_LOCATIONS[Phaser.Math.Clamp(index || 0, 0, CAMPAIGN_LOCATIONS.length - 1)];
+}
+
+function getCampaignSoulTarget() {
+    return Math.floor(CAMPAIGN_BASE_SOUL_TARGET * Math.pow(CAMPAIGN_SOUL_SCALE, GameState.campaignLocationIndex || 0));
+}
+
+function getCampaignWeaponProfile() {
+    const location = getCampaignLocation();
+    if (location.id === 'brazil') {
+        return {
+            id: 'lychee-shotgun',
+            playerTexture: 'lychee_player',
+            gunTexture: 'lychee_shotgun',
+            projectileTexture: 'lychee_projectile',
+            projectileDamage: 3,
+            projectileCount: 4,
+            spread: 0.62,
+            playerScale: 0.055,
+            gunScale: 0.055,
+            projectileScale: 0.035,
+            projectileSpeed: 540,
+            fireRate: 520
+        };
+    }
+    return {
+        id: 'classic-boba',
+        playerTexture: 'player_boba',
+        gunTexture: 'boba_gun',
+        projectileTexture: 'projectile_boba'
+    };
+}
+
+function getCampaignSoulProgress() {
+    const target = getCampaignSoulTarget();
+    return {
+        souls: GameState.runSouls || 0,
+        target,
+        pct: target > 0 ? Math.min(1, (GameState.runSouls || 0) / target) : 1
+    };
+}
+
+function sanitizeCampaignState() {
+    GameState.campaignLocationIndex = Phaser.Math.Clamp(GameState.campaignLocationIndex || 0, 0, CAMPAIGN_LOCATIONS.length - 1);
+    GameState.campaignUnlockedIndex = Phaser.Math.Clamp(
+        Math.max(GameState.campaignUnlockedIndex || 0, GameState.campaignLocationIndex),
+        0,
+        CAMPAIGN_LOCATIONS.length - 1
+    );
+    GameState.campaignCleared = GameState.campaignCleared || {};
+}
+
+function advanceCampaignLocation() {
+    sanitizeCampaignState();
+    const current = getCampaignLocation();
+    GameState.campaignCleared[current.id] = true;
+    const nextIndex = Math.min(GameState.campaignLocationIndex + 1, CAMPAIGN_LOCATIONS.length - 1);
+    GameState.campaignUnlockedIndex = Math.max(GameState.campaignUnlockedIndex, nextIndex);
+    GameState.campaignLocationIndex = nextIndex;
+    GameState.runSouls = 0;
+    SaveManager.save();
+}
 
 // ============================================
 // SAVE MANAGER
 // ============================================
 const SaveManager = {
     STORAGE_KEY: 'boba_roguelike_save',
-    VERSION: 7,
+    VERSION: 8,
 
     save() {
         const data = {
@@ -21,6 +95,9 @@ const SaveManager = {
             totalRage: GameState.totalRage,
             totalEnemiesKilled: GameState.totalEnemiesKilled,
             aimMode: GameState.aimMode,
+            campaignLocationIndex: GameState.campaignLocationIndex,
+            campaignUnlockedIndex: GameState.campaignUnlockedIndex,
+            campaignCleared: GameState.campaignCleared,
             idleMachines: GameState.idleMachines,
             idleFactoryTech: GameState.idleFactoryTech,
             evolutionBoost: GameState.evolutionBoost,
@@ -44,6 +121,10 @@ const SaveManager = {
             GameState.totalRage = data.totalRage || 0;
             GameState.totalEnemiesKilled = data.totalEnemiesKilled || 0;
             GameState.aimMode = data.aimMode === 'manual' ? 'manual' : 'auto';
+            GameState.campaignLocationIndex = data.campaignLocationIndex || 0;
+            GameState.campaignUnlockedIndex = data.campaignUnlockedIndex || GameState.campaignLocationIndex || 0;
+            GameState.campaignCleared = data.campaignCleared || {};
+            sanitizeCampaignState();
             GameState.idleMachines = data.idleMachines || {};
             GameState.idleFactoryTech = data.idleFactoryTech || {};
             GameState.evolutionBoost = data.evolutionBoost || 0;
@@ -57,13 +138,17 @@ const SaveManager = {
     },
 
     migrate(data) {
-        // Version 7 preserves progression and adds the new idle factory tech/evolution table.
+        // Version 8 preserves progression and adds campaign map progress.
         GameState.tapioca = data.tapioca || 0;
         GameState.totalTapioca = data.totalTapioca || 0;
         GameState.rage = data.rage || 0;
         GameState.totalRage = data.totalRage || 0;
         GameState.totalEnemiesKilled = data.totalEnemiesKilled || 0;
         GameState.aimMode = data.aimMode === 'manual' ? 'manual' : 'auto';
+        GameState.campaignLocationIndex = data.campaignLocationIndex || 0;
+        GameState.campaignUnlockedIndex = data.campaignUnlockedIndex || GameState.campaignLocationIndex || 0;
+        GameState.campaignCleared = data.campaignCleared || {};
+        sanitizeCampaignState();
         GameState.idleMachines = data.idleMachines || {};
         GameState.idleFactoryTech = data.idleFactoryTech || {};
         GameState.evolutionBoost = data.evolutionBoost || 0;
@@ -83,6 +168,9 @@ const SaveManager = {
         GameState.totalRage = 0;
         GameState.totalEnemiesKilled = 0;
         GameState.aimMode = 'auto';
+        GameState.campaignLocationIndex = 0;
+        GameState.campaignUnlockedIndex = 0;
+        GameState.campaignCleared = {};
         GameState.idleMachines = {};
         GameState.idleFactoryTech = {};
         GameState.evolutionBoost = 0;
@@ -507,11 +595,7 @@ function resumeGameSceneFromOverlay(scene) {
 
 function requestGameSceneSwitchFromOverlay(scene, targetKey, resetRun = true) {
     globalThis.__bobaSceneTransitioning = false;
-    if (resetRun) {
-        GameState.reset();
-    }
-    SaveManager.save();
-    hardSwitchScene(scene, targetKey);
+    forceSceneTransition(scene, targetKey, resetRun);
 }
 
 function forceSceneTransition(scene, targetKey, resetRun = true) {
@@ -533,7 +617,7 @@ function forceSceneTransition(scene, targetKey, resetRun = true) {
 
     globalThis.setTimeout(() => {
         try {
-            const menuSideScenes = ['ControlsScene', 'IdleFactoryScene', 'PermaUpgradeScene'];
+            const menuSideScenes = ['ControlsScene', 'IdleFactoryScene', 'PermaUpgradeScene', 'CampaignMapScene'];
             const scenesToStop = new Set([...RUN_SCENE_KEYS, ...menuSideScenes]);
             if (targetKey === 'MenuScene') {
                 scenesToStop.add('MenuScene');
@@ -624,6 +708,9 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'player_boba', path: 'assets/Player/player-boba.png' },
     { key: 'boba_gun', path: 'assets/Player/boba-gun.png' },
     { key: 'projectile_boba', path: 'assets/projectile-boba.png' },
+    { key: 'lychee_player', path: 'assets/Lychee Player.png' },
+    { key: 'lychee_shotgun', path: 'assets/Lychee Shotgun.png' },
+    { key: 'lychee_projectile', path: 'assets/Lychee Projectile.png' },
     { key: 'enemy_run_1', path: 'assets/Enemy/run-1.png' },
     { key: 'enemy_run_2', path: 'assets/Enemy/run-2.png' },
     { key: 'enemy_attack_1', path: 'assets/Enemy/attack-1.png' },
@@ -680,7 +767,7 @@ class BootScene extends Phaser.Scene {
 
             await new Promise((resolve, reject) => {
                 const source = getImageSource(asset.path);
-                if (!source || source === asset.path) {
+                if (!source) {
                     reject(new Error(`Missing embedded asset ${asset.path}`));
                     return;
                 }
@@ -956,6 +1043,7 @@ class MenuScene extends Phaser.Scene {
         this.makeTopIconButton(735, 70, 'Controls', () => this.scene.launch('ControlsScene'));
         this.makeTopIconButton(845, 70, 'Upgrades', () => this.scene.start('PermaUpgradeScene'));
         this.makeTopIconButton(945, 70, 'Factory', () => this.scene.start('IdleFactoryScene'));
+        this.makeTopIconButton(625, 70, 'Map', () => this.scene.start('CampaignMapScene', { fromMenu: true }));
 
         createPanel(this, 330, 360, 330, 300, 0x0d241e, 0x3a7a55, 0.92);
         createPanel(this, 705, 360, 330, 300, 0x0b1722, 0x536784, 0.92);
@@ -995,6 +1083,15 @@ class MenuScene extends Phaser.Scene {
             fill: '#c2cbda',
             align: 'center',
             lineSpacing: 4
+        }).setOrigin(0.5);
+
+        const campaign = getCampaignLocation();
+        const unlocked = GameState.campaignUnlockedIndex + 1;
+        this.add.text(705, 544, `CAMPAIGN: ${campaign.name.toUpperCase()}   ${unlocked}/${CAMPAIGN_LOCATIONS.length} MAP STOPS`, {
+            fontSize: '13px',
+            fill: '#ffe7aa',
+            align: 'center',
+            fontFamily: 'Arial Black'
         }).setOrigin(0.5);
 
         this.makeButton(215, 590, 'START GAME', () => {
@@ -1137,6 +1234,184 @@ class MenuScene extends Phaser.Scene {
         });
         btn.on('pointerdown', callback);
 
+        return btn;
+    }
+}
+
+// ============================================
+// CAMPAIGN MAP SCENE
+// ============================================
+class CampaignMapScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'CampaignMapScene' });
+    }
+
+    create(data = {}) {
+        sanitizeCampaignState();
+        this.fromRun = Boolean(data.fromRun);
+        this.fromMenu = Boolean(data.fromMenu);
+        resetCanvasInput(this);
+
+        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x071018, this.fromRun ? 0.94 : 1).setInteractive();
+        drawSceneBackdrop(this, 0x456b86);
+        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 900, 600, 0x101826, 0x536784, 0.96);
+
+        this.add.text(GAME_CENTER_X, 76, 'CAMPAIGN MAP', {
+            fontSize: '42px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#2f2717',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        this.add.text(GAME_CENTER_X, 118, 'Earn souls from kills in a single run, then challenge the local boss to move forward.', {
+            fontSize: '15px',
+            fill: '#c9d6e4',
+            align: 'center'
+        }).setOrigin(0.5);
+
+        this.drawMapSurface();
+        this.drawRoute();
+        this.drawLocationNodes();
+        this.createSoulPanel();
+        this.createActions();
+    }
+
+    drawMapSurface() {
+        const map = this.add.graphics();
+        map.fillStyle(0x0a1420, 0.92);
+        map.fillRoundedRect(82, 160, 836, 330, 12);
+        map.lineStyle(2, 0x2e4d66, 0.65);
+        map.strokeRoundedRect(82, 160, 836, 330, 12);
+
+        map.fillStyle(0x18374b, 0.34);
+        map.fillEllipse(218, 330, 210, 145);
+        map.fillEllipse(368, 420, 150, 112);
+        map.fillEllipse(548, 332, 148, 138);
+        map.fillEllipse(692, 358, 210, 122);
+        map.fillEllipse(802, 306, 120, 96);
+
+        for (let x = 120; x <= 880; x += 76) {
+            map.lineStyle(1, 0x31506b, 0.15);
+            map.lineBetween(x, 176, x, 474);
+        }
+        for (let y = 202; y <= 464; y += 44) {
+            map.lineStyle(1, 0x31506b, 0.15);
+            map.lineBetween(96, y, 904, y);
+        }
+    }
+
+    drawRoute() {
+        const route = this.add.graphics();
+        route.lineStyle(4, 0x4d6e87, 0.58);
+        for (let i = 0; i < CAMPAIGN_LOCATIONS.length - 1; i++) {
+            const a = CAMPAIGN_LOCATIONS[i];
+            const b = CAMPAIGN_LOCATIONS[i + 1];
+            route.lineBetween(a.x, a.y, b.x, b.y);
+        }
+        route.lineStyle(5, 0xffd27a, 0.86);
+        for (let i = 0; i < Math.min(GameState.campaignUnlockedIndex, CAMPAIGN_LOCATIONS.length - 1); i++) {
+            const a = CAMPAIGN_LOCATIONS[i];
+            const b = CAMPAIGN_LOCATIONS[i + 1];
+            route.lineBetween(a.x, a.y, b.x, b.y);
+        }
+    }
+
+    drawLocationNodes() {
+        CAMPAIGN_LOCATIONS.forEach((location, index) => {
+            const unlocked = index <= GameState.campaignUnlockedIndex;
+            const active = index === GameState.campaignLocationIndex;
+            const cleared = Boolean(GameState.campaignCleared?.[location.id]);
+            const fill = active ? location.accent : cleared ? 0x67d58a : unlocked ? 0x203549 : 0x121923;
+            const stroke = active ? 0xfff0b8 : unlocked ? location.accent : 0x4a5563;
+
+            const node = this.add.circle(location.x, location.y, active ? 28 : 23, fill, unlocked ? 0.96 : 0.72)
+                .setStrokeStyle(active ? 4 : 2, stroke)
+                .setInteractive({ useHandCursor: unlocked && !this.fromRun });
+            this.add.text(location.x, location.y, location.shortName, {
+                fontSize: '13px',
+                fill: unlocked ? '#fff7e6' : '#788390',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5);
+            this.add.text(location.x, location.y + 42, location.name.toUpperCase(), {
+                fontSize: active ? '13px' : '11px',
+                fill: active ? '#fff0b8' : unlocked ? '#d7e4ef' : '#7c8794',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5);
+
+            if (!this.fromRun && unlocked) {
+                node.on('pointerdown', () => {
+                    GameState.campaignLocationIndex = index;
+                    SaveManager.save();
+                    this.scene.restart({ fromMenu: true });
+                });
+            }
+        });
+    }
+
+    createSoulPanel() {
+        const location = getCampaignLocation();
+        const progress = getCampaignSoulProgress();
+        createPanel(this, GAME_CENTER_X, 548, 600, 86, 0x151b2b, 0x425072, 0.96);
+
+        this.add.text(236, 522, `CURRENT STOP: ${location.name.toUpperCase()}`, {
+            fontSize: '16px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0, 0.5);
+        this.add.text(236, 554, `Boss: ${location.boss}`, {
+            fontSize: '13px',
+            fill: '#b9c8d9'
+        }).setOrigin(0, 0.5);
+
+        this.add.rectangle(650, 544, 240, 18, 0x2a1a22).setOrigin(0, 0.5).setStrokeStyle(2, 0x6d4c5f);
+        this.add.rectangle(652, 544, 236 * progress.pct, 12, 0xd96bd8).setOrigin(0, 0.5);
+        this.add.text(770, 544, `${progress.souls} / ${progress.target} SOULS`, {
+            fontSize: '13px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+    }
+
+    createActions() {
+        const progress = getCampaignSoulProgress();
+        const canAdvance = progress.souls >= progress.target;
+        const allCleared = GameState.campaignLocationIndex >= CAMPAIGN_LOCATIONS.length - 1 && canAdvance;
+        const bossLabel = allCleared ? 'FINAL BOSS READY' : canAdvance ? 'BOSS READY' : 'BOSS LOCKED';
+
+        this.makeMapButton(366, 638, bossLabel, () => {
+            if (!canAdvance) return;
+            advanceCampaignLocation();
+            this.scene.restart({ fromRun: this.fromRun, fromMenu: this.fromMenu });
+        }, canAdvance ? 0xffd27a : 0x546070, canAdvance ? 0x3a2810 : 0x17202b, 220);
+
+        this.makeMapButton(630, 638, this.fromRun ? 'RESUME RUN' : 'MAIN MENU', () => {
+            if (this.fromRun) {
+                GameState.paused = false;
+                const gameScene = this.scene.get('GameScene');
+                this.scene.stop();
+                this.scene.resume('GameScene');
+                if (gameScene?.updateUI) {
+                    gameScene.updateUI();
+                }
+                return;
+            }
+            this.scene.start('MenuScene');
+        }, 0x7ed2ff, 0x102f42, 190);
+    }
+
+    makeMapButton(x, y, text, callback, accent, fill, width) {
+        const btn = this.add.rectangle(x, y, width, 44, fill, 0.98)
+            .setStrokeStyle(3, accent)
+            .setInteractive({ useHandCursor: true });
+        this.add.text(x, y, text, {
+            fontSize: '14px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        btn.on('pointerover', () => btn.setFillStyle(fill + 0x080808, 1));
+        btn.on('pointerout', () => btn.setFillStyle(fill, 0.98));
+        btn.on('pointerdown', callback);
         return btn;
     }
 }
@@ -1776,6 +2051,10 @@ class GameScene extends Phaser.Scene {
         this.playerDamage = char.damage;
         this.basePlayerDamage = char.damage;
         this.playerFireRate = char.fireRate;
+        this.weaponProfile = getCampaignWeaponProfile();
+        this.playerTextureKey = this.weaponProfile.playerTexture;
+        this.gunTextureKey = this.weaponProfile.gunTexture;
+        this.projectileTextureKey = this.weaponProfile.projectileTexture;
         this.playerSpeed *= 1 + ((GameState.idleMachines?.ballRoller || 0) * 0.01);
         this.playerDamage *= 1 + ((GameState.idleMachines?.ballMaker || 0) * 0.005);
         this.multiShot = char.multiShot || 1;
@@ -1783,6 +2062,14 @@ class GameScene extends Phaser.Scene {
         this.projectilePierce = 0;
         this.projectileSpeed = 500;
         this.projectileScale = 0.18;
+        if (this.weaponProfile.id === 'lychee-shotgun') {
+            this.playerDamage = this.weaponProfile.projectileDamage;
+            this.basePlayerDamage = this.weaponProfile.projectileDamage;
+            this.playerFireRate = this.weaponProfile.fireRate;
+            this.multiShot = this.weaponProfile.projectileCount;
+            this.projectileSpeed = this.weaponProfile.projectileSpeed;
+            this.projectileScale = this.weaponProfile.projectileScale;
+        }
         this.pierceDamageScale = 0;
         this.bounceDamageScale = 0;
         this.wallSplitCount = 0;
@@ -1809,6 +2096,7 @@ class GameScene extends Phaser.Scene {
         this.permaXpBonusPercent = 0;
         this.playerDown = false;
         this.runEnded = false;
+        this.deathTransitionPending = false;
         this.switchingScene = false;
         this.waveTransitioning = false;
         this.factoryInvincibleUntil = 0;
@@ -1885,6 +2173,8 @@ class GameScene extends Phaser.Scene {
             }
         });
 
+        this.input.keyboard.on('keydown-M', () => this.openCampaignMap());
+
         this.manualFireHeld = false;
         this.input.on('pointerdown', this.beginManualFire, this);
         this.input.on('pointerup', this.endManualFire, this);
@@ -1929,17 +2219,17 @@ class GameScene extends Phaser.Scene {
     }
 
     createPlayer() {
-        this.player = this.physics.add.sprite(GAME_CENTER_X, GAME_HEIGHT - 180, 'player_boba');
+        this.player = this.physics.add.sprite(GAME_CENTER_X, GAME_HEIGHT - 180, this.playerTextureKey || 'player_boba');
         this.player.setOrigin(0.5);
-        this.player.setScale(0.14);
+        this.player.setScale(this.weaponProfile?.playerScale || 0.14);
         this.player.setCollideWorldBounds(true);
         this.gunPivotOffset = { x: 0, y: -12 };
         this.gunMuzzleDistance = 43;
         this.currentAimAngle = -Math.PI / 2;
         this.currentGunMuzzle = { x: this.player.x, y: this.player.y - 55 };
-        this.gunSprite = this.add.image(this.player.x, this.player.y, 'boba_gun');
+        this.gunSprite = this.add.image(this.player.x, this.player.y, this.gunTextureKey || 'boba_gun');
         this.gunSprite.setOrigin(0.78, 0.5);
-        this.gunSprite.setScale(0.055);
+        this.gunSprite.setScale(this.weaponProfile?.gunScale || 0.055);
         this.gunSprite.setDepth(3);
 
         this.maxBobaCount = 5 + this.permaMaxAmmoBonus;
@@ -1951,6 +2241,7 @@ class GameScene extends Phaser.Scene {
     createHud() {
         createPanel(this, 112, 130, 208, 146, 0x151b2b, 0x425072, 0.82).setDepth(4);
         createPanel(this, GAME_WIDTH - 96, 76, 176, 118, 0x151b2b, 0x425072, 0.82).setDepth(4);
+        createPanel(this, GAME_CENTER_X, 24, 240, 36, 0x151b2b, 0x7a4f83, 0.82).setDepth(4);
         this.bobaCountText = this.add.text(16, 80, '', { fontSize: '14px', fill: '#fff' }).setOrigin(0, 0.5);
         this.reloadText = this.add.text(16, 98, 'RELOADING...', { fontSize: '10px', fill: '#ff6600' }).setOrigin(0, 0.5);
         this.reloadText.setVisible(false);
@@ -1969,6 +2260,19 @@ class GameScene extends Phaser.Scene {
         this.xpBarFill.displayWidth = 0;
         this.xpText = this.add.text(100, 55, '', { fontSize: '12px', fill: '#fff' }).setOrigin(0, 0.5);
 
+        this.soulBarBg = this.add.rectangle(GAME_CENTER_X - 80, 24, 148, 12, 0x2a1a22).setOrigin(0, 0.5).setDepth(5);
+        this.soulBarBg.setStrokeStyle(1, 0x7a4f83);
+        this.soulBarFill = this.add.rectangle(GAME_CENTER_X - 79, 24, 0, 8, 0xd96bd8).setOrigin(0, 0.5).setDepth(5);
+        this.soulText = this.add.text(GAME_CENTER_X + 4, 24, '', { fontSize: '12px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5).setDepth(5);
+        this.mapButton = this.add.rectangle(GAME_CENTER_X + 108, 24, 42, 22, 0x22162b, 0.98)
+            .setStrokeStyle(2, 0xd96bd8)
+            .setDepth(5)
+            .setInteractive({ useHandCursor: true });
+        this.mapButtonLabel = this.add.text(GAME_CENTER_X + 108, 24, 'MAP', { fontSize: '10px', fill: '#ffd7ff', fontFamily: 'Arial Black' }).setOrigin(0.5).setDepth(6);
+        this.mapButton.on('pointerover', () => this.mapButton.setFillStyle(0x332044, 1));
+        this.mapButton.on('pointerout', () => this.mapButton.setFillStyle(0x22162b, 0.98));
+        this.mapButton.on('pointerdown', () => this.openCampaignMap());
+
         this.waveText = this.add.text(GAME_WIDTH - 100, 20, 'WAVE 1', { fontSize: '18px', fill: '#fff4d6', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
         this.scoreText = this.add.text(GAME_WIDTH - 100, 45, 'SCORE: 0', { fontSize: '14px', fill: '#d5e4ff' }).setOrigin(0.5, 0.5).setDepth(5);
         this.levelText = this.add.text(GAME_WIDTH - 100, 70, 'LVL 1', { fontSize: '14px', fill: '#7ed2ff' }).setOrigin(0.5, 0.5).setDepth(5);
@@ -1982,13 +2286,22 @@ class GameScene extends Phaser.Scene {
         this.updateBobaDisplay();
     }
 
+    openCampaignMap() {
+        if (GameState.paused || this.runEnded || this.switchingScene) return;
+        this.setCombatMouseLocked(false);
+        GameState.paused = true;
+        this.scene.pause();
+        this.scene.launch('CampaignMapScene', { fromRun: true });
+    }
+
     configureWave() {
         const waveIndex = GameState.wave - 1;
         this.enemiesPerWave = 8 + (GameState.wave * 3);
         this.enemiesSpawnedThisWave = 0;
         this.enemiesKilledThisWave = 0;
         this.maxActiveEnemies = Math.min(24, 3 + Math.floor(GameState.wave * 1.25));
-        this.spawnDelay = Math.max(220, 1500 - (waveIndex * 85));
+        const waveSpawnDelay = Math.max(220, 1500 - (waveIndex * 85));
+        this.spawnDelay = GameState.wave >= 10 ? Math.max(110, Math.floor(waveSpawnDelay / 2)) : waveSpawnDelay;
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.delay = this.spawnDelay;
             this.enemySpawnTimer.paused = false;
@@ -2128,7 +2441,9 @@ class GameScene extends Phaser.Scene {
         this.currentGunMuzzle = this.getMuzzleFromAim(aimAngle);
         this.gunSprite.setVisible(true);
         this.gunSprite.setPosition(pivot.x, pivot.y);
-        // The source art faces left at zero rotation.
+        // The source art faces left at zero rotation. Mirror it on right-side aim
+        // so the gun stays visually upright while projectiles keep the true angle.
+        this.gunSprite.setFlipY(aimPoint.x > pivot.x);
         this.gunSprite.setRotation(aimAngle + Math.PI);
         this.player.setRotation(0);
     }
@@ -2239,7 +2554,19 @@ class GameScene extends Phaser.Scene {
             if (!enemy.active) return;
 
             const enemySpeed = Math.min(220, 95 + ((GameState.wave - 1) * 9));
-            this.physics.moveTo(enemy, this.player.x, this.player.y, enemySpeed);
+            const dx = this.player.x - enemy.x;
+            const dy = this.player.y - enemy.y;
+            const distanceToPlayer = Math.max(0.001, Math.sqrt((dx * dx) + (dy * dy)));
+            const stopRange = this.getEnemyPlayerStopRange();
+
+            if (distanceToPlayer > stopRange + 8) {
+                this.physics.moveTo(enemy, this.player.x, this.player.y, enemySpeed);
+            } else if (distanceToPlayer < stopRange) {
+                const pushSpeed = Math.min(enemySpeed, (stopRange - distanceToPlayer) * 12);
+                enemy.body.setVelocity((-dx / distanceToPlayer) * pushSpeed, (-dy / distanceToPlayer) * pushSpeed);
+            } else {
+                enemy.body.setVelocity(0, 0);
+            }
             enemy.setFlipX(enemy.x < this.player.x);
 
             if (this.isEnemyTouchingPlayer(enemy) && time >= (enemy.nextAttackAt || 0)) {
@@ -2248,10 +2575,14 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    getEnemyPlayerStopRange() {
+        const playerScaleBonus = Math.max(0, this.player.scaleX - 0.14) * 120;
+        return 52 + playerScaleBonus;
+    }
+
     isEnemyTouchingPlayer(enemy) {
         if (!enemy?.active || !this.player?.active) return false;
-        const playerScaleBonus = Math.max(0, this.player.scaleX - 0.14) * 120;
-        const contactRange = 38 + playerScaleBonus;
+        const contactRange = this.getEnemyPlayerStopRange() + 6;
         return Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y) < contactRange;
     }
 
@@ -2274,13 +2605,21 @@ class GameScene extends Phaser.Scene {
         this.currentGunMuzzle = muzzle;
 
         let fired = false;
-        // Fire multiShot pearls evenly distributed from the same gun muzzle point.
-        if (this.multiShot === 1) {
-            fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle);
+        const projectileCount = this.weaponProfile?.id === 'lychee-shotgun'
+            ? this.weaponProfile.projectileCount
+            : this.multiShot;
+        const spread = this.weaponProfile?.spread || 0.4;
+        const projectileDamage = this.weaponProfile?.id === 'lychee-shotgun'
+            ? this.weaponProfile.projectileDamage
+            : this.playerDamage;
+
+        // Fire shotgun/multishot pearls evenly from the same gun muzzle point.
+        if (projectileCount === 1) {
+            fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle, projectileDamage);
         } else {
-            for (let i = 0; i < this.multiShot; i++) {
-                const spreadAngle = ((i / (this.multiShot - 1)) - 0.5) * 0.4;
-                fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle + spreadAngle) || fired;
+            for (let i = 0; i < projectileCount; i++) {
+                const spreadAngle = ((i / (projectileCount - 1)) - 0.5) * spread;
+                fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle + spreadAngle, projectileDamage) || fired;
             }
         }
 
@@ -2299,7 +2638,7 @@ class GameScene extends Phaser.Scene {
         }
         if (!Number.isFinite(spawnX) || !Number.isFinite(spawnY)) return null;
 
-        const boba = this.physics.add.image(spawnX, spawnY, 'projectile_boba');
+        const boba = this.physics.add.image(spawnX, spawnY, this.projectileTextureKey || 'projectile_boba');
         this.bobas.add(boba);
         boba.setOrigin(0.5);
         const scale = this.projectileScale;
@@ -2598,12 +2937,7 @@ class GameScene extends Phaser.Scene {
             const killY = enemy.y;
             enemy.destroy();
 
-            GameState.score += 10;
-            GameState.addXP(getXpPerKill(this));
-            this.triggerXpPickupBoost();
-            GameState.enemiesKilledThisRun++;
-            GameState.totalEnemiesKilled++;
-            this.enemiesKilledThisWave++;
+            this.registerEnemyKill();
 
             const rageGain = getRagePerKill(this);
             GameState.rage += rageGain;
@@ -2626,12 +2960,7 @@ class GameScene extends Phaser.Scene {
                         otherEnemy.hp -= 30;
                         if (otherEnemy.hp <= 0) {
                             otherEnemy.destroy();
-                            GameState.score += 10;
-                            GameState.addXP(getXpPerKill(this));
-                            this.triggerXpPickupBoost();
-                            GameState.enemiesKilledThisRun++;
-                            GameState.totalEnemiesKilled++;
-                            this.enemiesKilledThisWave++;
+                            this.registerEnemyKill();
                             GameState.rage += rageGain;
                             GameState.totalRage += rageGain;
                             GameState.runRageEarned += rageGain;
@@ -2653,6 +2982,16 @@ class GameScene extends Phaser.Scene {
 
         this.updateUI();
         this.maybeLaunchLevelUpgrade();
+    }
+
+    registerEnemyKill() {
+        GameState.score += 10;
+        GameState.addXP(getXpPerKill(this));
+        this.triggerXpPickupBoost();
+        GameState.enemiesKilledThisRun++;
+        GameState.totalEnemiesKilled++;
+        GameState.runSouls++;
+        this.enemiesKilledThisWave++;
     }
 
     splitBobaFromKill(sourceBoba, x, y) {
@@ -2678,7 +3017,7 @@ class GameScene extends Phaser.Scene {
     }
 
     hitPlayer(player, enemy, time) {
-        if (this.playerDown || time < this.playerInvincibleUntil) return;
+        if (this.runEnded || this.deathTransitionPending || this.playerDown || time < this.playerInvincibleUntil) return;
         enemy.nextAttackAt = time + 700;
 
         if (this.hasShield && !this.shieldActive) {
@@ -2762,19 +3101,13 @@ class GameScene extends Phaser.Scene {
     }
 
     showGameOver() {
+        if (this.switchingScene) return;
         this.switchingScene = true;
-        globalThis.__bobaSceneTransitioning = false;
         this.setCombatMouseLocked(false);
         resetCanvasInput(this);
-        GameState.paused = false;
+        GameState.paused = true;
         GameState.upgradeSceneActive = false;
 
-        if (this.input) {
-            this.input.enabled = false;
-        }
-        if (this.physics?.world) {
-            this.physics.pause();
-        }
         if (this.player?.body) {
             this.player.body.setVelocity(0, 0);
         }
@@ -2794,14 +3127,23 @@ class GameScene extends Phaser.Scene {
         this.scene.stop('PauseScene');
         this.scene.stop('UpgradeScene');
         this.scene.stop('FactoryScene');
-        this.scene.start('GameOverScene');
+        this.scene.stop('CampaignMapScene');
+        this.scene.pause('GameScene');
+        this.scene.launch('GameOverScene');
     }
 
     endRun() {
         if (this.runEnded) return;
         this.runEnded = true;
+        this.deathTransitionPending = true;
         GameState.health = 0;
-        this.showGameOver();
+        this.updateUI();
+        this.enemies?.children?.entries?.forEach(enemy => {
+            if (enemy?.body) {
+                enemy.body.setVelocity(0, 0);
+            }
+        });
+        this.time.delayedCall(1, () => this.showGameOver());
     }
 
     knockOutPlayer() {
@@ -2876,6 +3218,14 @@ class GameScene extends Phaser.Scene {
         this.rageText.setText(`RAGE: ${Math.floor(GameState.rage)} (+${getRagePerKill(this)}/kill)`);
         this.tcText.setText(`TC: ${Math.floor(GameState.tc)} (+${getTcPerKill()}/kill)`);
         this.outputText.setText(`THIS RUN: +${Math.floor(GameState.runTcEarned)} TC`);
+
+        const soulProgress = getCampaignSoulProgress();
+        this.soulBarFill.width = 146 * soulProgress.pct;
+        this.soulText.setText(
+            soulProgress.souls >= soulProgress.target
+                ? `${getCampaignLocation().shortName} BOSS`
+                : `${getCampaignLocation().shortName} ${soulProgress.souls}/${soulProgress.target}`
+        );
 
         this.waveText.setText(`WAVE ${GameState.wave}`);
         this.scoreText.setText(`SCORE: ${GameState.score}`);
@@ -3064,24 +3414,28 @@ class GameOverScene extends Phaser.Scene {
         super({ key: 'GameOverScene' });
     }
 
-    startFreshRun() {
+    exitGameOverTo(targetKey) {
         if (this.switchingScene) return;
         this.switchingScene = true;
         resetRunUiState(this);
         GameState.reset();
         SaveManager.save();
-        this.scene.stop('GameScene');
-        this.scene.start('GameScene');
+
+        const sceneManager = this.game?.scene || this.scene?.manager;
+        globalThis.setTimeout(() => {
+            ['GameOverScene', 'GameScene', 'PauseScene', 'UpgradeScene', 'FactoryScene', 'CampaignMapScene'].forEach(sceneKey => {
+                sceneManager?.stop(sceneKey);
+            });
+            sceneManager?.start(targetKey);
+        }, 0);
+    }
+
+    startFreshRun() {
+        this.exitGameOverTo('GameScene');
     }
 
     returnToMenu() {
-        if (this.switchingScene) return;
-        this.switchingScene = true;
-        resetRunUiState(this);
-        GameState.reset();
-        SaveManager.save();
-        this.scene.stop('GameScene');
-        this.scene.start('MenuScene');
+        this.exitGameOverTo('MenuScene');
     }
 
     create() {
@@ -3114,7 +3468,11 @@ class GameOverScene extends Phaser.Scene {
             fontSize: '16px', fill: '#888'
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 470, `Lifetime Kills: ${GameState.totalEnemiesKilled}   |   Perma Pts: ${getAvailablePermaPoints()} / ${getTotalPermaPointsEarned()}`, {
+        this.add.text(GAME_CENTER_X, 462, `SOULS COLLECTED: ${GameState.runSouls} / ${getCampaignSoulTarget()} FOR ${getCampaignLocation().name.toUpperCase()}`, {
+            fontSize: '14px', fill: '#d9a6ff'
+        }).setOrigin(0.5);
+
+        this.add.text(GAME_CENTER_X, 486, `Lifetime Kills: ${GameState.totalEnemiesKilled}   |   Perma Pts: ${getAvailablePermaPoints()} / ${getTotalPermaPointsEarned()}`, {
             fontSize: '16px', fill: '#b8d8ff'
         }).setOrigin(0.5);
 
@@ -3338,7 +3696,7 @@ const config = {
     parent: 'game-root',
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scene: [BootScene, MenuScene, IdleFactoryScene, PermaUpgradeScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
+    scene: [BootScene, MenuScene, CampaignMapScene, IdleFactoryScene, PermaUpgradeScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
     input: {
         mouse: {
             preventDefaultWheel: false

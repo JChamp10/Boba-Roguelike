@@ -37,6 +37,12 @@ const GameState = {
     selectedCharacter: 0,
     volume: 0.8,
     aimMode: 'auto',
+
+    // Campaign progress
+    campaignLocationIndex: 0,
+    campaignUnlockedIndex: 0,
+    campaignCleared: {},
+    runSouls: 0,
     
     addXP(amount) {
         let levelsGained = 0;
@@ -69,6 +75,7 @@ const GameState = {
         this.runRageEarned = 0;
         this.tc = 0;
         this.runTcEarned = 0;
+        this.runSouls = 0;
         this.factoryRepairCount = 0;
         this.factoryFortifyLevel = 0;
         this.paused = false;
