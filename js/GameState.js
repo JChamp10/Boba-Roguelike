@@ -12,6 +12,7 @@ const GameState = {
     idleFactoryTech: {},
     evolutionBoost: 0,
     factoryUpgrades: {},
+    runBoosts: {},
     totalEnemiesKilled: 0,
     
     // Roguelike run

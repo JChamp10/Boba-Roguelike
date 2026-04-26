@@ -1,18 +1,18 @@
 
 
-const GAME_WIDTH = 1000;
-const GAME_HEIGHT = 700;
+const GAME_WIDTH = 1200;
+const GAME_HEIGHT = 800;
 const GAME_CENTER_X = GAME_WIDTH / 2;
 const GAME_CENTER_Y = GAME_HEIGHT / 2;
 const CAMPAIGN_BASE_SOUL_TARGET = 100000;
 const CAMPAIGN_SOUL_SCALE = 5;
 
 const CAMPAIGN_LOCATIONS = [
-    { id: 'america', name: 'America', shortName: 'USA', x: 150, y: 382, accent: 0x6fb7ff, boss: 'Cupzilla Prime' },
-    { id: 'brazil', name: 'Brazil', shortName: 'BRA', x: 280, y: 496, accent: 0x64d970, boss: 'Carnival Shaker' },
-    { id: 'egypt', name: 'Egypt', shortName: 'EGY', x: 510, y: 398, accent: 0xf3c35c, boss: 'Pharaoh Tapioca' },
-    { id: 'india', name: 'India', shortName: 'IND', x: 665, y: 420, accent: 0xff9f66, boss: 'Masala Monarch' },
-    { id: 'taiwan', name: 'Taiwan', shortName: 'TWN', x: 798, y: 372, accent: 0xd98bff, boss: 'Pearl Empress' }
+    { id: 'america', name: 'America', shortName: 'USA', x: 116, y: 374, accent: 0x6fb7ff, boss: 'Cupzilla Prime' },
+    { id: 'brazil', name: 'Brazil', shortName: 'BRA', x: 284, y: 520, accent: 0x64d970, boss: 'Carnival Shaker' },
+    { id: 'egypt', name: 'Egypt', shortName: 'EGY', x: 520, y: 382, accent: 0xf3c35c, boss: 'Pharaoh Tapioca' },
+    { id: 'india', name: 'India', shortName: 'IND', x: 704, y: 426, accent: 0xff9f66, boss: 'Masala Monarch' },
+    { id: 'taiwan', name: 'Taiwan', shortName: 'TWN', x: 884, y: 356, accent: 0xd98bff, boss: 'Pearl Empress' }
 ];
 
 function getCampaignLocation(index = GameState.campaignLocationIndex) {
@@ -75,7 +75,7 @@ function advanceCampaignLocation() {
     const nextIndex = Math.min(GameState.campaignLocationIndex + 1, CAMPAIGN_LOCATIONS.length - 1);
     GameState.campaignUnlockedIndex = Math.max(GameState.campaignUnlockedIndex, nextIndex);
     GameState.campaignLocationIndex = nextIndex;
-    GameState.runSouls = 0;
+    resetRunOnlyProgress();
     SaveManager.save();
 }
 
@@ -102,7 +102,8 @@ const SaveManager = {
             idleFactoryTech: GameState.idleFactoryTech,
             evolutionBoost: GameState.evolutionBoost,
             savedAt: Date.now(),
-            factoryUpgrades: this.sanitizeFactoryUpgrades(GameState.factoryUpgrades)
+            factoryUpgrades: this.sanitizeFactoryUpgrades(GameState.factoryUpgrades),
+            runBoosts: this.sanitizeRunBoosts(GameState.runBoosts)
         };
         try {
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
@@ -129,6 +130,7 @@ const SaveManager = {
             GameState.idleFactoryTech = data.idleFactoryTech || {};
             GameState.evolutionBoost = data.evolutionBoost || 0;
             GameState.factoryUpgrades = this.sanitizeFactoryUpgrades(data.factoryUpgrades);
+            GameState.runBoosts = this.sanitizeRunBoosts(data.runBoosts);
             GameState.machines = {};
             this.applyOfflineIdleProgress(data.savedAt);
             return true;
@@ -153,6 +155,7 @@ const SaveManager = {
         GameState.idleFactoryTech = data.idleFactoryTech || {};
         GameState.evolutionBoost = data.evolutionBoost || 0;
         GameState.factoryUpgrades = this.sanitizeFactoryUpgrades(data.factoryUpgrades);
+        GameState.runBoosts = this.sanitizeRunBoosts(data.runBoosts);
         GameState.machines = {};
         GameState.reset();
         this.applyOfflineIdleProgress(data.savedAt);
@@ -175,6 +178,7 @@ const SaveManager = {
         GameState.idleFactoryTech = {};
         GameState.evolutionBoost = 0;
         GameState.factoryUpgrades = {};
+        GameState.runBoosts = {};
         GameState.reset();
     },
 
@@ -183,6 +187,16 @@ const SaveManager = {
         const sanitized = {};
         Object.entries(factoryUpgrades || {}).forEach(([id, level]) => {
             if (!allowedIds.has(id)) return;
+            if (isTemporaryPerRunUpgrade(id)) return;
+            sanitized[id] = Math.max(0, level || 0);
+        });
+        return sanitized;
+    },
+
+    sanitizeRunBoosts(runBoosts) {
+        const sanitized = {};
+        Object.entries(runBoosts || {}).forEach(([id, level]) => {
+            if (!isTemporaryPerRunUpgrade(id)) return;
             sanitized[id] = Math.max(0, level || 0);
         });
         return sanitized;
@@ -248,6 +262,16 @@ const PERMA_UPGRADES = [
     { id: 'menuXpBonus', branch: 'Per-Run Boosts', name: 'XP Bonus', desc: '+5% XP gained per level', icon: 'XP', baseCost: 20000, costScale: 1.10, maxLevel: 999, effectText: '+5% XP', apply: scene => { scene.permaXpBonusPercent += 0.05; } }
 ];
 
+const TEMPORARY_PER_RUN_UPGRADE_IDS = new Set(
+    PERMA_UPGRADES
+        .filter(upgrade => upgrade.branch === 'Per-Run Boosts')
+        .map(upgrade => upgrade.id)
+);
+
+function isTemporaryPerRunUpgrade(id) {
+    return TEMPORARY_PER_RUN_UPGRADE_IDS.has(id);
+}
+
 // FACTORY UPGRADE DEFINITIONS (legacy draft data)
 // ============================================
 const FACTORY_STAT_UPGRADES = [
@@ -271,8 +295,8 @@ const FACTORY_SPECIAL_UPGRADES = [
 // UPGRADE DEFINITIONS (in-run upgrades — existing)
 // ============================================
 const UPGRADES = [
-    { id: 'shot1', branch: 'shot', tier: 1, name: 'Extra Tapioca', desc: '+1 shot', icon: '+1', apply: scene => { scene.multiShot += 1; } },
-    { id: 'shot2', branch: 'shot', tier: 2, name: 'Tapioca+', desc: '+1 shot', icon: '+1', requires: ['shot1'], apply: scene => { scene.multiShot += 1; } },
+    { id: 'shot1', branch: 'shot', tier: 1, name: 'Extra Tapioca', desc: '+1 shot, -20% damage', icon: '+1', apply: scene => { scene.multiShot += 1; scene.playerDamage *= 0.80; } },
+    { id: 'shot2', branch: 'shot', tier: 2, name: 'Tapioca+', desc: '+1 shot, -30% damage', icon: '+1', requires: ['shot1'], apply: scene => { scene.multiShot += 1; scene.playerDamage *= 0.70; } },
     { id: 'shot3', branch: 'shot', tier: 3, name: 'Mostly Boba', desc: '+2 shots', icon: '+2', requires: ['shot2'], apply: scene => { scene.multiShot += 2; } },
     { id: 'shot4', branch: 'shot', tier: 4, name: 'All Boba', desc: '+3 shots', icon: '+3', requires: ['shot3'], apply: scene => { scene.multiShot += 3; } },
     { id: 'shot5', branch: 'shot', tier: 5, name: 'Boba God', desc: 'Shots split when killing enemies', icon: 'SPLIT', requires: ['shot4'], apply: scene => { scene.splitOnKill = true; } },
@@ -413,8 +437,13 @@ function getTcPerKill() {
     return 1 + Math.floor((GameState.wave - 1) / 3);
 }
 
+function getEnemyWaveScale(wave, growth = 0.13) {
+    return Math.pow(1 + growth, Math.max(0, wave - 1));
+}
+
 function getEnemyMaxHpForWave(wave) {
-    return 30 + ((Math.max(1, wave) - 1) * 5);
+    const safeWave = Math.max(1, wave);
+    return Math.floor(30 * getEnemyWaveScale(safeWave, 0.14) + ((safeWave - 1) * 3));
 }
 
 function getXpPerKill(scene) {
@@ -493,6 +522,9 @@ function getPermaUpgrade(id) {
 }
 
 function getPermaUpgradeLevel(id) {
+    if (isTemporaryPerRunUpgrade(id)) {
+        return GameState.runBoosts?.[id] || 0;
+    }
     return GameState.factoryUpgrades[id] || 0;
 }
 
@@ -542,6 +574,11 @@ function getFactoryFortifyCost() {
 
 function getReadableUpgradeStatus(upgrade) {
     return `Lvl ${getPermaUpgradeLevel(upgrade.id)}`;
+}
+
+function resetRunOnlyProgress() {
+    GameState.reset();
+    GameState.runBoosts = {};
 }
 
 function getBaseFactoryTPS() {
@@ -715,6 +752,10 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'enemy_run_1', path: 'assets/Enemy/run-1.png' },
     { key: 'enemy_run_2', path: 'assets/Enemy/run-2.png' },
     { key: 'enemy_attack_1', path: 'assets/Enemy/attack-1.png' },
+    { key: 'thrower_run_1', path: 'assets/ThrowerAssets/Throwerrun1.png' },
+    { key: 'thrower_run_2', path: 'assets/ThrowerAssets/throwerrun2.png' },
+    { key: 'thrower_throw', path: 'assets/ThrowerAssets/throwerthrow.png' },
+    { key: 'thrower_projectile', path: 'assets/ThrowerAssets/projectile.png' },
     { key: 'factory-ingame', path: 'assets/factory-ingame.png' },
     { key: 'upgrade-shot', path: 'assets/Boba_Upgrades/upgrade-shot.png' },
     { key: 'upgrade-speed', path: 'assets/Boba_Upgrades/upgrade-speed.png' },
@@ -807,10 +848,35 @@ class BootScene extends Phaser.Scene {
             frameRate: 8,
             repeat: -1
         });
+        this.anims.create({
+            key: 'thrower_run',
+            frames: [
+                { key: 'thrower_run_1' },
+                { key: 'thrower_run_2' }
+            ],
+            frameRate: 8,
+            repeat: -1
+        });
+        this.anims.create({
+            key: 'thrower_attack',
+            frames: [
+                { key: 'thrower_throw' }
+            ],
+            frameRate: 8,
+            repeat: 0
+        });
         SaveManager.load();
         SaveManager.save();
         document.getElementById('boot-status')?.remove();
-        this.scene.start('MenuScene');
+        const bootIntent = sessionStorage.getItem('boba_boot_intent');
+        sessionStorage.removeItem('boba_boot_intent');
+        if (bootIntent === 'play-again') {
+            GameState.reset();
+            SaveManager.save();
+            this.scene.start('GameScene');
+        } else {
+            this.scene.start('MenuScene');
+        }
     }
 
     createFileModeFallbackImages() {
@@ -970,6 +1036,16 @@ class BootScene extends Phaser.Scene {
         xpG.fillRect(0, 0, 200, 12);
         xpG.generateTexture('xp_fill', 200, 12);
         xpG.destroy();
+
+        const xpOrbG = this.add.graphics();
+        xpOrbG.fillStyle(0x73d7ff, 0.35);
+        xpOrbG.fillCircle(12, 12, 12);
+        xpOrbG.fillStyle(0x7efcff, 1);
+        xpOrbG.fillCircle(12, 12, 7);
+        xpOrbG.fillStyle(0xffffff, 0.9);
+        xpOrbG.fillCircle(9, 8, 3);
+        xpOrbG.generateTexture('xp_pickup', 24, 24);
+        xpOrbG.destroy();
 
         // UI elements
         const btnG = this.add.graphics();
@@ -1255,9 +1331,9 @@ class CampaignMapScene extends Phaser.Scene {
 
         this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x071018, this.fromRun ? 0.94 : 1).setInteractive();
         drawSceneBackdrop(this, 0x456b86);
-        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 900, 600, 0x101826, 0x536784, 0.96);
+        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 980, 680, 0x101826, 0x536784, 0.96);
 
-        this.add.text(GAME_CENTER_X, 76, 'CAMPAIGN MAP', {
+        this.add.text(GAME_CENTER_X, 48, 'CAMPAIGN MAP', {
             fontSize: '42px',
             fill: '#fff4d6',
             fontFamily: 'Arial Black',
@@ -1265,7 +1341,7 @@ class CampaignMapScene extends Phaser.Scene {
             strokeThickness: 4
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 118, 'Earn souls from kills in a single run, then challenge the local boss to move forward.', {
+        this.add.text(GAME_CENTER_X, 88, 'Earn souls from kills in a single run, then challenge the local boss to move forward.', {
             fontSize: '15px',
             fill: '#c9d6e4',
             align: 'center'
@@ -1281,24 +1357,24 @@ class CampaignMapScene extends Phaser.Scene {
     drawMapSurface() {
         const map = this.add.graphics();
         map.fillStyle(0x0a1420, 0.92);
-        map.fillRoundedRect(82, 160, 836, 330, 12);
+        map.fillRoundedRect(34, 118, 932, 426, 12);
         map.lineStyle(2, 0x2e4d66, 0.65);
-        map.strokeRoundedRect(82, 160, 836, 330, 12);
+        map.strokeRoundedRect(34, 118, 932, 426, 12);
 
         map.fillStyle(0x18374b, 0.34);
-        map.fillEllipse(218, 330, 210, 145);
-        map.fillEllipse(368, 420, 150, 112);
-        map.fillEllipse(548, 332, 148, 138);
-        map.fillEllipse(692, 358, 210, 122);
-        map.fillEllipse(802, 306, 120, 96);
+        map.fillEllipse(214, 320, 250, 178);
+        map.fillEllipse(370, 462, 190, 136);
+        map.fillEllipse(558, 322, 196, 170);
+        map.fillEllipse(736, 366, 260, 150);
+        map.fillEllipse(860, 292, 150, 112);
 
-        for (let x = 120; x <= 880; x += 76) {
+        for (let x = 76; x <= 928; x += 76) {
             map.lineStyle(1, 0x31506b, 0.15);
-            map.lineBetween(x, 176, x, 474);
+            map.lineBetween(x, 136, x, 526);
         }
-        for (let y = 202; y <= 464; y += 44) {
+        for (let y = 154; y <= 510; y += 44) {
             map.lineStyle(1, 0x31506b, 0.15);
-            map.lineBetween(96, y, 904, y);
+            map.lineBetween(52, y, 948, y);
         }
     }
 
@@ -1342,7 +1418,10 @@ class CampaignMapScene extends Phaser.Scene {
 
             if (!this.fromRun && unlocked) {
                 node.on('pointerdown', () => {
-                    GameState.campaignLocationIndex = index;
+                    if (GameState.campaignLocationIndex !== index) {
+                        GameState.campaignLocationIndex = index;
+                        resetRunOnlyProgress();
+                    }
                     SaveManager.save();
                     this.scene.restart({ fromMenu: true });
                 });
@@ -1353,21 +1432,21 @@ class CampaignMapScene extends Phaser.Scene {
     createSoulPanel() {
         const location = getCampaignLocation();
         const progress = getCampaignSoulProgress();
-        createPanel(this, GAME_CENTER_X, 548, 600, 86, 0x151b2b, 0x425072, 0.96);
+        createPanel(this, GAME_CENTER_X, 582, 680, 80, 0x151b2b, 0x425072, 0.96);
 
-        this.add.text(236, 522, `CURRENT STOP: ${location.name.toUpperCase()}`, {
+        this.add.text(202, 560, `CURRENT STOP: ${location.name.toUpperCase()}`, {
             fontSize: '16px',
             fill: '#fff4d6',
             fontFamily: 'Arial Black'
         }).setOrigin(0, 0.5);
-        this.add.text(236, 554, `Boss: ${location.boss}`, {
+        this.add.text(202, 590, `Boss: ${location.boss}`, {
             fontSize: '13px',
             fill: '#b9c8d9'
         }).setOrigin(0, 0.5);
 
-        this.add.rectangle(650, 544, 240, 18, 0x2a1a22).setOrigin(0, 0.5).setStrokeStyle(2, 0x6d4c5f);
-        this.add.rectangle(652, 544, 236 * progress.pct, 12, 0xd96bd8).setOrigin(0, 0.5);
-        this.add.text(770, 544, `${progress.souls} / ${progress.target} SOULS`, {
+        this.add.rectangle(622, 576, 270, 18, 0x2a1a22).setOrigin(0, 0.5).setStrokeStyle(2, 0x6d4c5f);
+        this.add.rectangle(624, 576, 266 * progress.pct, 12, 0xd96bd8).setOrigin(0, 0.5);
+        this.add.text(757, 576, `${progress.souls} / ${progress.target} SOULS`, {
             fontSize: '13px',
             fill: '#fff7e6',
             fontFamily: 'Arial Black'
@@ -1380,13 +1459,13 @@ class CampaignMapScene extends Phaser.Scene {
         const allCleared = GameState.campaignLocationIndex >= CAMPAIGN_LOCATIONS.length - 1 && canAdvance;
         const bossLabel = allCleared ? 'FINAL BOSS READY' : canAdvance ? 'BOSS READY' : 'BOSS LOCKED';
 
-        this.makeMapButton(366, 638, bossLabel, () => {
+        this.makeMapButton(366, 662, bossLabel, () => {
             if (!canAdvance) return;
             advanceCampaignLocation();
             this.scene.restart({ fromRun: this.fromRun, fromMenu: this.fromMenu });
         }, canAdvance ? 0xffd27a : 0x546070, canAdvance ? 0x3a2810 : 0x17202b, 220);
 
-        this.makeMapButton(630, 638, this.fromRun ? 'RESUME RUN' : 'MAIN MENU', () => {
+        this.makeMapButton(630, 662, this.fromRun ? 'RESUME RUN' : 'MAIN MENU', () => {
             if (this.fromRun) {
                 GameState.paused = false;
                 const gameScene = this.scene.get('GameScene');
@@ -1813,7 +1892,7 @@ class PermaUpgradeScene extends Phaser.Scene {
             const canBuy = canBuyPermaUpgrade(node.upgrade);
             const isMaxed = level >= node.upgrade.maxLevel;
             node.effect.setText(node.compact ? `${node.upgrade.effectText} / level` : `Each level: ${node.upgrade.effectText}`);
-            node.status.setText(`Owned: ${level} levels`);
+            node.status.setText(`${isTemporaryPerRunUpgrade(node.upgrade.id) ? 'Queued' : 'Owned'}: ${level} levels`);
             node.cost.setText(isMaxed ? 'MAX' : `Next\n${cost} TP`);
             node.cta.setText(isMaxed ? 'MAXED OUT' : canBuy ? 'CLICK TO BUY' : 'NEED MORE TAPIOCA');
             if (isMaxed) {
@@ -1844,14 +1923,19 @@ class PermaUpgradeScene extends Phaser.Scene {
             ? 'Requires: ' + upgrade.requires.map(id => getPermaUpgrade(id)?.name || id).join(', ')
             : 'No prerequisite';
         const cost = getPermaUpgradeCost(upgrade);
-        this.detailText.setText(`${upgrade.name}: permanent ${upgrade.desc}   |   Next ${cost} TP   |   ${requires}`);
+        const duration = isTemporaryPerRunUpgrade(upgrade.id) ? 'next run only' : 'permanent';
+        this.detailText.setText(`${upgrade.name}: ${duration} ${upgrade.desc}   |   Next ${cost} TP   |   ${requires}`);
     }
 
     buyPermaUpgrade(id) {
         const upgrade = getPermaUpgrade(id);
         if (!upgrade || !canBuyPermaUpgrade(upgrade)) return;
         GameState.tapioca -= getPermaUpgradeCost(upgrade);
-        GameState.factoryUpgrades[id] = getPermaUpgradeLevel(id) + 1;
+        if (isTemporaryPerRunUpgrade(id)) {
+            GameState.runBoosts[id] = getPermaUpgradeLevel(id) + 1;
+        } else {
+            GameState.factoryUpgrades[id] = getPermaUpgradeLevel(id) + 1;
+        }
         SaveManager.save();
         this.updateUpgradeShop();
     }
@@ -1985,6 +2069,13 @@ class PauseScene extends Phaser.Scene {
             fill: '#9fb3d9',
             align: 'center'
         }).setOrigin(0.5);
+        this.upgradeTreeTooltip = this.add.text(630, 638, '', {
+            fontSize: '13px',
+            fill: '#fff4d6',
+            align: 'center',
+            fontFamily: 'Arial',
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5).setDepth(30).setVisible(false);
 
         const branches = ['shot', 'speed', 'damage', 'health', 'pierce', 'bounce'];
         const labels = {
@@ -2016,17 +2107,29 @@ class PauseScene extends Phaser.Scene {
                 const unlocked = meetsUpgradeRequirements(upgrade);
                 const fill = ownedTier ? 0x69531b : unlocked ? 0x27334d : 0x171c2b;
                 const stroke = ownedTier ? 0xffd700 : unlocked ? 0x6f819f : 0x353f55;
-                const tierBox = this.add.rectangle(x, y, 46, 38, fill, 0.98).setStrokeStyle(2, stroke);
-                this.add.text(x, y - 5, `T${upgrade.tier}`, {
+                const tierBox = this.add.rectangle(x, y, 46, 38, fill, 0.98)
+                    .setStrokeStyle(2, stroke)
+                    .setInteractive({ useHandCursor: true });
+                const tierText = this.add.text(x, y - 5, `T${upgrade.tier}`, {
                     fontSize: '11px',
                     fill: ownedTier ? '#fff4c4' : '#8fa1bd',
                     fontFamily: 'Arial Black'
-                }).setOrigin(0.5);
-                this.add.text(x, y + 10, upgrade.icon, {
+                }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+                const iconText = this.add.text(x, y + 10, upgrade.icon, {
                     fontSize: upgrade.icon.length > 3 ? '8px' : '11px',
                     fill: ownedTier ? '#ffd700' : '#8fa1bd',
                     fontFamily: 'Arial Black'
-                }).setOrigin(0.5);
+                }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+                [tierBox, tierText, iconText].forEach(item => {
+                    item.on('pointerover', () => {
+                        tierBox.setStrokeStyle(3, ownedTier ? 0xfff0a8 : 0x9bd2ff);
+                        this.showUpgradeTreeTooltip(upgrade, ownedTier, unlocked);
+                    });
+                    item.on('pointerout', () => {
+                        tierBox.setStrokeStyle(2, stroke);
+                        this.upgradeTreeTooltip.setVisible(false);
+                    });
+                });
             });
 
             this.add.text(780, y, highestOwned ? highestOwned.name : 'None', {
@@ -2035,6 +2138,13 @@ class PauseScene extends Phaser.Scene {
                 wordWrap: { width: 130 }
             }).setOrigin(0, 0.5);
         });
+    }
+
+    showUpgradeTreeTooltip(upgrade, ownedTier, unlocked) {
+        const status = ownedTier ? 'Owned' : unlocked ? 'Available in draft' : 'Locked';
+        this.upgradeTreeTooltip
+            .setText(`${upgrade.name} (${status})\n${upgrade.desc}`)
+            .setVisible(true);
     }
 }
 
@@ -2112,6 +2222,14 @@ class GameScene extends Phaser.Scene {
         this.waveTransitioning = false;
         this.factoryInvincibleUntil = 0;
         this.playerInvincibleUntil = 0;
+        this.dashCharges = 2;
+        this.maxDashCharges = 2;
+        this.dashRechargeDelay = 3000;
+        this.nextDashRechargeAt = 0;
+        this.isDashing = false;
+        this.dashDamageReduction = 0;
+        this.dashUntil = 0;
+        this.lastMoveDir = { x: 0, y: -1 };
 
         this.hasFreeze = false;
         this.hasExplode = false;
@@ -2129,6 +2247,10 @@ class GameScene extends Phaser.Scene {
                 upgrade.apply(this);
             }
         });
+        if (Object.keys(GameState.runBoosts || {}).length > 0) {
+            GameState.runBoosts = {};
+            SaveManager.save();
+        }
 
         GameState.rage += this.permaStartingRageBonus;
         GameState.health = GameState.maxHealth;
@@ -2151,12 +2273,17 @@ class GameScene extends Phaser.Scene {
 
         this.enemies = this.physics.add.group();
         this.bobas = this.physics.add.group();
+        this.enemyProjectiles = this.physics.add.group();
+        this.xpPickups = this.physics.add.group();
+        this.physics.add.overlap(this.player, this.xpPickups, this.collectXpPickup, null, this);
+        this.physics.add.overlap(this.player, this.enemyProjectiles, this.hitPlayerWithEnemyProjectile, null, this);
 
         this.cursors = this.input.keyboard.addKeys({
             up: Phaser.Input.Keyboard.KeyCodes.W,
             down: Phaser.Input.Keyboard.KeyCodes.S,
             left: Phaser.Input.Keyboard.KeyCodes.A,
-            right: Phaser.Input.Keyboard.KeyCodes.D
+            right: Phaser.Input.Keyboard.KeyCodes.D,
+            dash: Phaser.Input.Keyboard.KeyCodes.SPACE
         });
 
         this.configureWave();
@@ -2183,8 +2310,6 @@ class GameScene extends Phaser.Scene {
                 this.scene.launch('PauseScene');
             }
         });
-
-        this.input.keyboard.on('keydown-M', () => this.openCampaignMap());
 
         this.manualFireHeld = false;
         this.input.on('pointerdown', this.beginManualFire, this);
@@ -2260,6 +2385,7 @@ class GameScene extends Phaser.Scene {
         this.rageText = this.add.text(16, 138, '', { fontSize: '14px', fill: '#ff6666' }).setOrigin(0, 0.5);
         this.tcText = this.add.text(16, 158, '', { fontSize: '14px', fill: '#66ccff' }).setOrigin(0, 0.5);
         this.outputText = this.add.text(16, 178, '', { fontSize: '13px', fill: '#ffe9a6' }).setOrigin(0, 0.5);
+        this.dashText = this.add.text(16, 198, '', { fontSize: '13px', fill: '#9dfff2', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
 
         this.healthBarBg = this.add.image(100, 30, 'health_bg').setOrigin(0, 0.5);
         this.healthBarFill = this.add.image(100, 30, 'health_fill').setOrigin(0, 0.5);
@@ -2275,15 +2401,6 @@ class GameScene extends Phaser.Scene {
         this.soulBarBg.setStrokeStyle(1, 0x7a4f83);
         this.soulBarFill = this.add.rectangle(GAME_CENTER_X - 79, 24, 0, 8, 0xd96bd8).setOrigin(0, 0.5).setDepth(5);
         this.soulText = this.add.text(GAME_CENTER_X + 4, 24, '', { fontSize: '12px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5).setDepth(5);
-        this.mapButton = this.add.rectangle(GAME_CENTER_X + 108, 24, 42, 22, 0x22162b, 0.98)
-            .setStrokeStyle(2, 0xd96bd8)
-            .setDepth(5)
-            .setInteractive({ useHandCursor: true });
-        this.mapButtonLabel = this.add.text(GAME_CENTER_X + 108, 24, 'MAP', { fontSize: '10px', fill: '#ffd7ff', fontFamily: 'Arial Black' }).setOrigin(0.5).setDepth(6);
-        this.mapButton.on('pointerover', () => this.mapButton.setFillStyle(0x332044, 1));
-        this.mapButton.on('pointerout', () => this.mapButton.setFillStyle(0x22162b, 0.98));
-        this.mapButton.on('pointerdown', () => this.openCampaignMap());
-
         this.waveText = this.add.text(GAME_WIDTH - 100, 20, 'WAVE 1', { fontSize: '18px', fill: '#fff4d6', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
         this.scoreText = this.add.text(GAME_WIDTH - 100, 45, 'SCORE: 0', { fontSize: '14px', fill: '#d5e4ff' }).setOrigin(0.5, 0.5).setDepth(5);
         this.levelText = this.add.text(GAME_WIDTH - 100, 70, 'LVL 1', { fontSize: '14px', fill: '#7ed2ff' }).setOrigin(0.5, 0.5).setDepth(5);
@@ -2297,22 +2414,16 @@ class GameScene extends Phaser.Scene {
         this.updateBobaDisplay();
     }
 
-    openCampaignMap() {
-        if (GameState.paused || this.runEnded || this.switchingScene) return;
-        this.setCombatMouseLocked(false);
-        GameState.paused = true;
-        this.scene.pause();
-        this.scene.launch('CampaignMapScene', { fromRun: true });
-    }
-
     configureWave() {
-        const waveIndex = GameState.wave - 1;
-        this.enemiesPerWave = 8 + (GameState.wave * 3);
+        const waveScale = getEnemyWaveScale(GameState.wave, 0.12);
+        const postWaveFivePressure = GameState.wave > 5 ? 1 + Math.min(1.6, (GameState.wave - 5) * 0.14) : 1;
+        this.enemiesPerWave = Math.floor((9 + (GameState.wave * 2.2) + (waveScale * 4)) * postWaveFivePressure);
         this.enemiesSpawnedThisWave = 0;
         this.enemiesKilledThisWave = 0;
-        this.maxActiveEnemies = Math.min(40, 5 + Math.floor(GameState.wave * 1.7));
-        const waveSpawnDelay = Math.max(130, 950 - (waveIndex * 70));
-        this.spawnDelay = GameState.wave >= 10 ? Math.max(65, Math.floor(waveSpawnDelay / 2)) : waveSpawnDelay;
+        this.maxActiveEnemies = Math.min(95, Math.floor((7 + (GameState.wave * 1.35) + (waveScale * 2.4)) * postWaveFivePressure));
+        const waveSpawnDelay = Math.floor(950 / getEnemyWaveScale(GameState.wave, 0.16));
+        const pressureDelay = Math.floor(waveSpawnDelay / postWaveFivePressure);
+        this.spawnDelay = GameState.wave >= 10 ? Math.max(35, Math.floor(pressureDelay / 2)) : Math.max(GameState.wave > 5 ? 55 : 90, pressureDelay);
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.delay = this.spawnDelay;
             this.enemySpawnTimer.paused = false;
@@ -2323,10 +2434,13 @@ class GameScene extends Phaser.Scene {
         if (GameState.paused || this.runEnded) return;
 
         this.updatePlayerMovement();
+        this.updateDash(time);
         this.updatePlayerVisuals();
         this.updateEnemyHealthBars();
         this.updateFactoryVisual(time);
+        this.updateXpPickups();
         this.validateProjectiles();
+        this.validateEnemyProjectiles();
 
         if (!this.playerDown && this.bobaCount <= 0 && !this.isReloading) {
             this.reloadBoba();
@@ -2375,11 +2489,21 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    validateEnemyProjectiles() {
+        this.enemyProjectiles?.children.entries.forEach(projectile => {
+            if (!projectile.active) return;
+            if (projectile.x < -80 || projectile.x > GAME_WIDTH + 80 || projectile.y < -80 || projectile.y > GAME_HEIGHT + 80) {
+                projectile.destroy();
+            }
+        });
+    }
+
     updatePlayerMovement() {
         if (this.playerDown) {
             this.player.body.setVelocity(0);
             return;
         }
+        if (this.isDashing) return;
 
         let vx = 0;
         let vy = 0;
@@ -2391,10 +2515,124 @@ class GameScene extends Phaser.Scene {
         if (vx !== 0 || vy !== 0) {
             const len = Math.sqrt((vx * vx) + (vy * vy));
             const speed = this.getEffectivePlayerSpeed();
-            this.player.body.setVelocity((vx / len) * speed, (vy / len) * speed);
+            const dirX = vx / len;
+            const dirY = vy / len;
+            this.lastMoveDir = { x: dirX, y: dirY };
+            this.player.body.setVelocity(dirX * speed, dirY * speed);
         } else {
             this.player.body.setVelocity(0);
         }
+    }
+
+    updateDash(time) {
+        if (Phaser.Input.Keyboard.JustDown(this.cursors.dash)) {
+            this.tryDash(time);
+        }
+        if (this.isDashing && time >= this.dashUntil) {
+            this.isDashing = false;
+            this.dashDamageReduction = 0;
+            this.player.clearTint();
+        }
+        if (this.dashCharges < this.maxDashCharges && time >= this.nextDashRechargeAt) {
+            this.dashCharges++;
+            this.nextDashRechargeAt = this.dashCharges < this.maxDashCharges ? time + this.dashRechargeDelay : 0;
+            this.updateUI();
+        }
+    }
+
+    tryDash(time) {
+        if (this.playerDown || this.runEnded || this.dashCharges <= 0) return;
+        this.dashCharges--;
+        if (this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt <= 0) {
+            this.nextDashRechargeAt = time + this.dashRechargeDelay;
+        }
+
+        const dir = this.getDashDirection();
+        this.isDashing = true;
+        this.dashDamageReduction = 0.5;
+        this.dashUntil = time + 210;
+        this.player.body.setVelocity(dir.x * 760, dir.y * 760);
+        this.player.setTint(0x9dfff2);
+        this.playDashRoll(dir);
+        this.createDashEffect(dir);
+        this.applyDashKnockback(dir);
+        this.updateUI();
+    }
+
+    getDashDirection() {
+        let dx = 0;
+        let dy = 0;
+        if (this.cursors.left.isDown) dx -= 1;
+        if (this.cursors.right.isDown) dx += 1;
+        if (this.cursors.up.isDown) dy -= 1;
+        if (this.cursors.down.isDown) dy += 1;
+        if (dx === 0 && dy === 0) {
+            dx = this.lastMoveDir.x;
+            dy = this.lastMoveDir.y;
+        }
+        const len = Math.max(0.001, Math.sqrt((dx * dx) + (dy * dy)));
+        return { x: dx / len, y: dy / len };
+    }
+
+    createDashEffect(dir) {
+        const trail = this.add.rectangle(this.player.x - dir.x * 34, this.player.y - dir.y * 34, 92, 20, 0x7efcff, 0.45)
+            .setRotation(Math.atan2(dir.y, dir.x))
+            .setDepth(2);
+        const ring = this.add.circle(this.player.x, this.player.y, 30, 0x9dfff2, 0.24)
+            .setStrokeStyle(3, 0x9dfff2, 0.9)
+            .setDepth(2);
+        this.tweens.add({
+            targets: trail,
+            alpha: 0,
+            scaleX: 1.8,
+            duration: 220,
+            ease: 'Sine.easeOut',
+            onComplete: () => trail.destroy()
+        });
+        this.tweens.add({
+            targets: ring,
+            alpha: 0,
+            scale: 2.1,
+            duration: 260,
+            ease: 'Sine.easeOut',
+            onComplete: () => ring.destroy()
+        });
+    }
+
+    playDashRoll(dir) {
+        this.tweens.killTweensOf(this.player);
+        const spinDirection = dir.x < 0 ? -1 : 1;
+        const baseScale = this.weaponProfile?.playerScale || 0.14;
+        this.tweens.add({
+            targets: this.player,
+            angle: this.player.angle + (360 * spinDirection),
+            scaleX: baseScale * 1.12,
+            scaleY: baseScale * 0.88,
+            duration: 210,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+                if (!this.player?.active) return;
+                this.tweens.add({
+                    targets: this.player,
+                    angle: 0,
+                    scaleX: baseScale,
+                    scaleY: baseScale,
+                    duration: 90,
+                    ease: 'Back.easeOut'
+                });
+            }
+        });
+    }
+
+    applyDashKnockback(dir) {
+        this.enemies?.children.entries.forEach(enemy => {
+            if (!enemy.active) return;
+            const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+            if (dist > 120) return;
+            const away = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+            enemy.body.setVelocity(Math.cos(away) * 460 + dir.x * 180, Math.sin(away) * 460 + dir.y * 180);
+            enemy.nextAttackAt = Math.max(enemy.nextAttackAt || 0, this.time.now + 450);
+        });
     }
 
     getEffectivePlayerSpeed() {
@@ -2411,6 +2649,49 @@ class GameScene extends Phaser.Scene {
     triggerXpPickupBoost() {
         if (!this.xpSpeedBoostEnabled) return;
         this.xpSpeedBoostUntil = this.time.now + 3000;
+    }
+
+    spawnXpPickup(x, y, amount = getXpPerKill(this)) {
+        if (!this.xpPickups) return;
+        const pickup = this.physics.add.image(x, y, 'xp_pickup');
+        pickup.xpAmount = amount;
+        pickup.setDepth(2);
+        pickup.setScale(1);
+        pickup.body.setCircle(8, 4, 4);
+        pickup.body.setAllowGravity(false);
+        pickup.body.setVelocity(Phaser.Math.Between(-45, 45), Phaser.Math.Between(-55, 25));
+        pickup.body.setDrag(120, 120);
+        this.xpPickups.add(pickup);
+        this.tweens.add({
+            targets: pickup,
+            scale: 1.18,
+            yoyo: true,
+            repeat: -1,
+            duration: 450
+        });
+    }
+
+    updateXpPickups() {
+        if (!this.xpPickups || !this.player?.active) return;
+        this.xpPickups.children.entries.forEach(pickup => {
+            if (!pickup.active) return;
+            const dist = Phaser.Math.Distance.Between(pickup.x, pickup.y, this.player.x, this.player.y);
+            if (dist < 150) {
+                const speed = Phaser.Math.Linear(120, 360, Math.max(0, (150 - dist) / 150));
+                this.physics.moveToObject(pickup, this.player, speed);
+            }
+        });
+    }
+
+    collectXpPickup(player, pickup) {
+        if (!pickup.active) return;
+        const amount = pickup.xpAmount || getXpPerKill(this);
+        pickup.destroy();
+        GameState.addXP(amount);
+        this.triggerXpPickupBoost();
+        this.showDamageNumber(player.x, player.y - 34, `+${amount} XP`, '#7ed2ff');
+        this.updateUI();
+        this.maybeLaunchLevelUpgrade();
     }
 
     maybeLaunchLevelUpgrade() {
@@ -2564,13 +2845,15 @@ class GameScene extends Phaser.Scene {
         this.enemies.children.entries.forEach(enemy => {
             if (!enemy.active) return;
 
-            const enemySpeed = Math.min(220, 95 + ((GameState.wave - 1) * 9));
+            const enemySpeed = Math.min(320, Math.floor(92 + (getEnemyWaveScale(GameState.wave, 0.09) * 16) + ((GameState.wave - 1) * 4)));
             const dx = this.player.x - enemy.x;
             const dy = this.player.y - enemy.y;
             const distanceToPlayer = Math.max(0.001, Math.sqrt((dx * dx) + (dy * dy)));
             const stopRange = this.getEnemyPlayerStopRange();
 
-            if (distanceToPlayer > stopRange + 8) {
+            if (enemy.enemyType === 'thrower') {
+                this.updateThrowerEnemy(enemy, time, distanceToPlayer, enemySpeed);
+            } else if (distanceToPlayer > stopRange + 8) {
                 this.physics.moveTo(enemy, this.player.x, this.player.y, enemySpeed);
             } else if (distanceToPlayer < stopRange) {
                 const pushSpeed = Math.min(enemySpeed, (stopRange - distanceToPlayer) * 12);
@@ -2584,6 +2867,25 @@ class GameScene extends Phaser.Scene {
                 this.hitPlayer(this.player, enemy, time);
             }
         });
+    }
+
+    updateThrowerEnemy(enemy, time, distanceToPlayer, enemySpeed) {
+        const targetRange = 260;
+        const minRange = 180;
+        const throwerSpeed = enemySpeed * 0.72;
+        if (distanceToPlayer > targetRange + 28) {
+            this.physics.moveTo(enemy, this.player.x, this.player.y, throwerSpeed);
+        } else if (distanceToPlayer < minRange) {
+            const angleAway = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+            enemy.body.setVelocity(Math.cos(angleAway) * throwerSpeed, Math.sin(angleAway) * throwerSpeed);
+        } else {
+            enemy.body.setVelocity(0, 0);
+        }
+
+        if (!this.playerDown && time >= (enemy.nextThrowAt || 0)) {
+            this.throwEnemyProjectile(enemy);
+            enemy.nextThrowAt = time + 4000;
+        }
     }
 
     getEnemyPlayerStopRange() {
@@ -2716,7 +3018,8 @@ class GameScene extends Phaser.Scene {
         this.damageNumberCounter = (this.damageNumberCounter + 1) % 6;
         const offsetX = ((this.damageNumberCounter % 3) - 1) * 16;
         const offsetY = Math.floor(this.damageNumberCounter / 3) * -10;
-        const text = this.add.text(x + offsetX, y - 18 + offsetY, String(Math.round(amount)), {
+        const label = typeof amount === 'number' ? String(Math.round(amount)) : String(amount);
+        const text = this.add.text(x + offsetX, y - 18 + offsetY, label, {
             fontSize: '18px',
             fill: color,
             fontFamily: 'Arial Black',
@@ -2884,17 +3187,20 @@ class GameScene extends Phaser.Scene {
             case 3: x = -30; y = Phaser.Math.Between(0, GAME_HEIGHT); break;
         }
 
-        const enemy = this.enemies.create(x, y, 'enemy_run_1');
+        const isThrower = GameState.wave >= 5 && (this.enemiesSpawnedThisWave + 1) % 6 === 0;
+        const enemy = this.enemies.create(x, y, isThrower ? 'thrower_run_1' : 'enemy_run_1');
         enemy.setOrigin(0.5);
         enemy.setCollideWorldBounds(true);
         enemy.setBounce(1);
-        enemy.play('enemy_run');
-        enemy.setScale(0.2);
-        enemy.body.setSize(72, 72, true);
+        enemy.enemyType = isThrower ? 'thrower' : 'melee';
+        enemy.play(isThrower ? 'thrower_run' : 'enemy_run');
+        enemy.setScale(isThrower ? 0.48 : 0.2);
+        enemy.body.setSize(isThrower ? 116 : 72, isThrower ? 96 : 72, true);
 
-        enemy.maxHp = getEnemyMaxHpForWave(GameState.wave);
+        enemy.maxHp = Math.floor(getEnemyMaxHpForWave(GameState.wave) * (isThrower ? 0.75 : 1));
         enemy.hp = enemy.maxHp;
         enemy.nextAttackAt = 0;
+        enemy.nextThrowAt = isThrower ? this.time.now + 500 : Infinity;
         enemy.enemyId = ++this.enemyIdCounter;
 
         // Health bar above enemy
@@ -2949,6 +3255,7 @@ class GameScene extends Phaser.Scene {
             enemy.destroy();
 
             this.registerEnemyKill();
+            this.spawnXpPickup(killX, killY);
 
             const rageGain = getRagePerKill(this);
             GameState.rage += rageGain;
@@ -2970,8 +3277,11 @@ class GameScene extends Phaser.Scene {
                         this.showDamageNumber(otherEnemy.x, otherEnemy.y, 30, '#ffb36b');
                         otherEnemy.hp -= 30;
                         if (otherEnemy.hp <= 0) {
+                            const explodeKillX = otherEnemy.x;
+                            const explodeKillY = otherEnemy.y;
                             otherEnemy.destroy();
                             this.registerEnemyKill();
+                            this.spawnXpPickup(explodeKillX, explodeKillY);
                             GameState.rage += rageGain;
                             GameState.totalRage += rageGain;
                             GameState.runRageEarned += rageGain;
@@ -2997,8 +3307,6 @@ class GameScene extends Phaser.Scene {
 
     registerEnemyKill() {
         GameState.score += 10;
-        GameState.addXP(getXpPerKill(this));
-        this.triggerXpPickupBoost();
         GameState.enemiesKilledThisRun++;
         GameState.totalEnemiesKilled++;
         GameState.runSouls++;
@@ -3017,18 +3325,42 @@ class GameScene extends Phaser.Scene {
     }
 
     triggerEnemyAttack(enemy, targetX) {
-        enemy.play('enemy_attack');
+        enemy.play(enemy.enemyType === 'thrower' ? 'thrower_attack' : 'enemy_attack');
         enemy.body.setVelocity(0, 0);
         enemy.setFlipX(enemy.x < targetX);
         this.time.delayedCall(200, () => {
             if (enemy.active) {
-                enemy.play('enemy_run');
+                enemy.play(enemy.enemyType === 'thrower' ? 'thrower_run' : 'enemy_run');
             }
         });
     }
 
+    throwEnemyProjectile(enemy) {
+        if (!enemy?.active || !this.player?.active || this.playerDown) return;
+        this.triggerEnemyAttack(enemy, this.player.x);
+        const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+        const spawnX = enemy.x + Math.cos(angle) * 28;
+        const spawnY = enemy.y + Math.sin(angle) * 28;
+        const projectile = this.enemyProjectiles.create(spawnX, spawnY, 'thrower_projectile');
+        projectile.setOrigin(0.5);
+        projectile.setScale(0.11);
+        projectile.setDepth(4);
+        projectile.damage = 20;
+        projectile.body.setCircle(150, 100, 100);
+        projectile.body.setAllowGravity(false);
+        projectile.body.velocity.set(Math.cos(angle) * 300, Math.sin(angle) * 300);
+        projectile.rotation = angle;
+        projectile.setAngularVelocity(360);
+    }
+
+    hitPlayerWithEnemyProjectile(player, projectile) {
+        if (!projectile.active || this.runEnded || this.deathTransitionPending || this.playerDown) return;
+        projectile.destroy();
+        this.damagePlayer(projectile.damage || 20);
+    }
+
     hitPlayer(player, enemy, time) {
-        if (this.runEnded || this.deathTransitionPending || this.playerDown || time < this.playerInvincibleUntil) return;
+        if (this.runEnded || this.deathTransitionPending || this.playerDown) return;
         enemy.nextAttackAt = time + 700;
 
         if (this.hasShield && !this.shieldActive) {
@@ -3046,7 +3378,7 @@ class GameScene extends Phaser.Scene {
 
         this.triggerEnemyAttack(enemy, player.x);
 
-        const rawDamage = 10 + GameState.wave * 2;
+        const rawDamage = Math.floor(10 + (GameState.wave * 1.5) + (getEnemyWaveScale(GameState.wave, 0.12) * 2));
         if (this.periodicFullBlock && time >= this.nextFullBlockAt) {
             this.nextFullBlockAt = time + 5000;
             this.player.setTint(0x9dfff2);
@@ -3059,10 +3391,16 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
-        const reducedDamage = rawDamage * (1 - Math.min(0.85, this.damageReductionPercent || 0));
+        this.damagePlayer(rawDamage);
+    }
+
+    damagePlayer(rawDamage) {
+        if (this.runEnded || this.deathTransitionPending || this.playerDown) return;
+        const totalReduction = Math.min(0.9, (this.damageReductionPercent || 0) + (this.dashDamageReduction || 0));
+        const reducedDamage = rawDamage * (1 - totalReduction);
         const damage = Math.max(1, reducedDamage - (this.damageReduction || 0));
         GameState.health = Math.max(0, GameState.health - damage);
-        this.playerInvincibleUntil = time + 500;
+        this.playerInvincibleUntil = this.time.now + 500;
 
         this.player.setTint(0xff0000);
         this.time.delayedCall(100, () => {
@@ -3108,6 +3446,8 @@ class GameScene extends Phaser.Scene {
 
         this.enemies?.clear(true, true);
         this.bobas?.clear(true, true);
+        this.enemyProjectiles?.clear(true, true);
+        this.xpPickups?.clear(true, true);
         forceSceneTransition(this, targetKey, resetRun);
     }
 
@@ -3133,6 +3473,8 @@ class GameScene extends Phaser.Scene {
 
         this.enemies?.clear(true, true);
         this.bobas?.clear(true, true);
+        this.enemyProjectiles?.clear(true, true);
+        this.xpPickups?.clear(true, true);
         SaveManager.save();
 
         this.scene.stop('PauseScene');
@@ -3229,6 +3571,10 @@ class GameScene extends Phaser.Scene {
         this.rageText.setText(`RAGE: ${Math.floor(GameState.rage)} (+${getRagePerKill(this)}/kill)`);
         this.tcText.setText(`TC: ${Math.floor(GameState.tc)} (+${getTcPerKill()}/kill)`);
         this.outputText.setText(`THIS RUN: +${Math.floor(GameState.runTcEarned)} TC`);
+        const dashCooldown = this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt > 0
+            ? ` ${Math.max(0, Math.ceil((this.nextDashRechargeAt - this.time.now) / 1000))}s`
+            : '';
+        this.dashText.setText(`DASH: ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
 
         const soulProgress = getCampaignSoulProgress();
         this.soulBarFill.width = 146 * soulProgress.pct;
@@ -3431,14 +3777,9 @@ class GameOverScene extends Phaser.Scene {
         resetRunUiState(this);
         GameState.reset();
         SaveManager.save();
-
-        const sceneManager = this.game?.scene || this.scene?.manager;
-        globalThis.setTimeout(() => {
-            ['GameOverScene', 'GameScene', 'PauseScene', 'UpgradeScene', 'FactoryScene', 'CampaignMapScene'].forEach(sceneKey => {
-                sceneManager?.stop(sceneKey);
-            });
-            sceneManager?.start(targetKey);
-        }, 0);
+        this.destroyDomButtons();
+        sessionStorage.setItem('boba_boot_intent', targetKey === 'GameScene' ? 'play-again' : 'menu');
+        window.location.reload();
     }
 
     startFreshRun() {
@@ -3451,6 +3792,11 @@ class GameOverScene extends Phaser.Scene {
 
     create() {
         resetRunUiState(this);
+        this.scene.bringToTop();
+        this.gameOverButtonBounds = [
+            { x: GAME_CENTER_X, y: 530, width: 260, height: 64, target: 'GameScene' },
+            { x: GAME_CENTER_X, y: 595, width: 260, height: 64, target: 'MenuScene' }
+        ];
 
         drawSceneBackdrop(this, 0x6b4b86);
         createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 620, 530, 0x131a2a, 0x665a88, 0.96);
@@ -3487,29 +3833,123 @@ class GameOverScene extends Phaser.Scene {
             fontSize: '16px', fill: '#b8d8ff'
         }).setOrigin(0.5);
 
-        const restartBtn = this.add.image(GAME_CENTER_X, 530, 'btn').setInteractive({ useHandCursor: true });
-        const restartLabel = this.add.text(GAME_CENTER_X, 530, 'PLAY AGAIN', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
+        this.makeGameOverButton(GAME_CENTER_X, 530, 'PLAY AGAIN', () => this.startFreshRun());
+        this.makeGameOverButton(GAME_CENTER_X, 595, 'MAIN MENU', () => this.returnToMenu());
+        this.createDomGameOverButtons();
+        this.fallbackGameOverClick = event => this.handleFallbackGameOverClick(event);
+        document.addEventListener('pointerdown', this.fallbackGameOverClick, true);
+        this.input.keyboard?.once('keydown-R', () => this.startFreshRun());
+        this.input.keyboard?.once('keydown-ENTER', () => this.startFreshRun());
+        this.input.keyboard?.once('keydown-M', () => this.returnToMenu());
+        this.input.keyboard?.once('keydown-ESC', () => this.returnToMenu());
+        this.events.once('shutdown', () => this.destroyDomButtons());
+    }
 
-        restartBtn.on('pointerover', () => restartBtn.setTexture('btn_hover'));
-        restartBtn.on('pointerout', () => restartBtn.setTexture('btn'));
-        restartBtn.on('pointerdown', () => {
-            this.startFreshRun();
-        });
-        restartLabel.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-            this.startFreshRun();
-        });
+    makeGameOverButton(x, y, label, callback) {
+        const hit = this.add.rectangle(x, y, 220, 54, 0x4a5160, 1)
+            .setStrokeStyle(2, 0x9aa7bd)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(20);
+        const text = this.add.text(x, y, label, {
+            fontSize: '20px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5).setDepth(21);
+        const press = () => callback();
+        hit.on('pointerover', () => hit.setFillStyle(0x5e687a, 1));
+        hit.on('pointerout', () => hit.setFillStyle(0x4a5160, 1));
+        hit.on('pointerdown', press);
+        text.setInteractive({ useHandCursor: true }).on('pointerdown', press);
+        return { hit, text };
+    }
 
-        const menuBtn = this.add.image(GAME_CENTER_X, 595, 'btn').setInteractive({ useHandCursor: true });
-        const menuLabel = this.add.text(GAME_CENTER_X, 595, 'MAIN MENU', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
+    createDomGameOverButtons() {
+        this.destroyDomButtons();
+        const canvas = this.game?.canvas;
+        if (!canvas || !document?.body) return;
 
-        menuBtn.on('pointerover', () => menuBtn.setTexture('btn_hover'));
-        menuBtn.on('pointerout', () => menuBtn.setTexture('btn'));
-        menuBtn.on('pointerdown', () => {
-            this.returnToMenu();
+        const makeButton = (label, gameX, gameY, callback) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = label.toUpperCase();
+            button.setAttribute('aria-label', label);
+            button.style.position = 'fixed';
+            button.style.zIndex = '9999';
+            button.style.opacity = '1';
+            button.style.border = '2px solid #d7deee';
+            button.style.borderRadius = '0';
+            button.style.padding = '0';
+            button.style.margin = '0';
+            button.style.cursor = 'pointer';
+            button.style.pointerEvents = 'auto';
+            button.style.background = '#596274';
+            button.style.color = '#fff7e6';
+            button.style.font = '800 20px Arial, sans-serif';
+            button.style.textShadow = '0 2px 0 rgba(0,0,0,0.45)';
+            button.addEventListener('click', event => {
+                event.preventDefault();
+                event.stopPropagation();
+                callback();
+            });
+            document.body.appendChild(button);
+            return { button, gameX, gameY, width: 220, height: 54 };
+        };
+
+        this.domGameOverButtons = [
+            makeButton('Play again', GAME_CENTER_X, 530, () => this.startFreshRun()),
+            makeButton('Main menu', GAME_CENTER_X, 595, () => this.returnToMenu())
+        ];
+        this.positionDomButtons = () => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = rect.width / GAME_WIDTH;
+            const scaleY = rect.height / GAME_HEIGHT;
+            this.domGameOverButtons?.forEach(entry => {
+                entry.button.style.left = `${rect.left + ((entry.gameX - (entry.width / 2)) * scaleX)}px`;
+                entry.button.style.top = `${rect.top + ((entry.gameY - (entry.height / 2)) * scaleY)}px`;
+                entry.button.style.width = `${entry.width * scaleX}px`;
+                entry.button.style.height = `${entry.height * scaleY}px`;
+            });
+        };
+        this.positionDomButtons();
+        window.addEventListener('resize', this.positionDomButtons);
+    }
+
+    destroyDomButtons() {
+        if (this.fallbackGameOverClick) {
+            document.removeEventListener('pointerdown', this.fallbackGameOverClick, true);
+            this.fallbackGameOverClick = null;
+        }
+        if (this.positionDomButtons) {
+            window.removeEventListener('resize', this.positionDomButtons);
+            this.positionDomButtons = null;
+        }
+        this.domGameOverButtons?.forEach(entry => entry.button.remove());
+        this.domGameOverButtons = null;
+    }
+
+    handleFallbackGameOverClick(event) {
+        if (this.switchingScene) return;
+        const gamePoint = this.getGamePointFromClient(event.clientX, event.clientY);
+        if (!gamePoint) return;
+        const clicked = this.gameOverButtonBounds?.find(bounds => {
+            return Math.abs(gamePoint.x - bounds.x) <= bounds.width / 2
+                && Math.abs(gamePoint.y - bounds.y) <= bounds.height / 2;
         });
-        menuLabel.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-            this.returnToMenu();
-        });
+        if (!clicked) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.exitGameOverTo(clicked.target);
+    }
+
+    getGamePointFromClient(clientX, clientY) {
+        const canvas = this.game?.canvas;
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return {
+            x: ((clientX - rect.left) / rect.width) * GAME_WIDTH,
+            y: ((clientY - rect.top) / rect.height) * GAME_HEIGHT
+        };
     }
 }
 
