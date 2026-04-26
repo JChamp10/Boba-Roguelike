@@ -152,7 +152,7 @@ const SaveManager = {
         GameState.idleMachines = data.idleMachines || {};
         GameState.idleFactoryTech = data.idleFactoryTech || {};
         GameState.evolutionBoost = data.evolutionBoost || 0;
-        GameState.factoryUpgrades = {};
+        GameState.factoryUpgrades = this.sanitizeFactoryUpgrades(data.factoryUpgrades);
         GameState.machines = {};
         GameState.reset();
         this.applyOfflineIdleProgress(data.savedAt);
@@ -239,7 +239,8 @@ const IDLE_FACTORY_TECH = [
 // ============================================
 const PERMA_UPGRADES = [
     { id: 'menuSpeed', branch: 'Small Boosts', name: 'Speed', desc: '+1% run speed per level', icon: 'SPD', baseCost: 1000, costScale: 1.10, maxLevel: 999, effectText: '+1% speed', apply: scene => { scene.playerSpeed += scene.basePlayerSpeed * 0.01; } },
-    { id: 'menuDamage', branch: 'Small Boosts', name: 'Damage', desc: '+0.1% run damage per level', icon: 'DMG', baseCost: 2500, costScale: 1.25, maxLevel: 999, effectText: '+0.1% damage', apply: scene => { scene.playerDamage += scene.basePlayerDamage * 0.001; } },
+    { id: 'menuDamage', branch: 'Small Boosts', name: 'Damage', desc: '+1% run damage per level', icon: 'DMG', baseCost: 2500, costScale: 1.25, maxLevel: 999, effectText: '+1% damage', apply: scene => { scene.playerDamage += scene.basePlayerDamage * 0.01; } },
+    { id: 'menuReload', branch: 'Small Boosts', name: 'Reload Speed', desc: '+1% reload speed per level', icon: 'RLD', baseCost: 1000, costScale: 1.10, maxLevel: 999, effectText: '+1% reload speed', apply: scene => { scene.permaReloadSpeedBonus += 0.01; } },
     { id: 'menuHealth', branch: 'Small Boosts', name: 'Health', desc: '+1 max HP per level', icon: 'HP', baseCost: 5000, costScale: 1.30, maxLevel: 999, effectText: '+1 max HP', apply: () => { GameState.maxHealth += 1; } },
     { id: 'menuAmmo', branch: 'Small Boosts', name: 'Ammo Capacity', desc: '+1 max boba ammo per level', icon: 'AMMO', baseCost: 100000, costScale: 1.25, maxLevel: 999, effectText: '+1 max ammo', apply: scene => { scene.permaMaxAmmoBonus += 1; } },
     { id: 'menuRageBonus', branch: 'Per-Run Boosts', name: 'Rage Bonus', desc: '+2% rage gained per level', icon: 'RAGE', baseCost: 10000, costScale: 1.10, maxLevel: 999, effectText: '+2% rage', apply: scene => { scene.permaRageBonusPercent += 0.02; } },
@@ -767,7 +768,7 @@ class BootScene extends Phaser.Scene {
 
             await new Promise((resolve, reject) => {
                 const source = getImageSource(asset.path);
-                if (!source) {
+                if (!source || source === asset.path) {
                     reject(new Error(`Missing embedded asset ${asset.path}`));
                     return;
                 }
@@ -1664,7 +1665,7 @@ class PermaUpgradeScene extends Phaser.Scene {
             fill: '#9fb3d9'
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 175, 'SMALL BOOSTS', { fontSize: '19px', fill: '#74d39a', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        this.add.text(GAME_CENTER_X, 175, 'PERMANENT SMALL BOOSTS', { fontSize: '19px', fill: '#74d39a', fontFamily: 'Arial Black' }).setOrigin(0.5);
         this.add.text(GAME_CENTER_X, 372, 'PER-RUN BOOSTS', { fontSize: '19px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
 
         this.shopCards = [];
@@ -1673,10 +1674,11 @@ class PermaUpgradeScene extends Phaser.Scene {
             { branch: 'Per-Run Boosts', y: 455 }
         ].forEach(row => {
             const rowUpgrades = PERMA_UPGRADES.filter(upgrade => upgrade.branch === row.branch);
-            const spacing = rowUpgrades.length >= 4 ? 230 : 280;
+            const compact = rowUpgrades.length >= 5;
+            const spacing = compact ? 178 : 280;
             const startX = GAME_CENTER_X - ((rowUpgrades.length - 1) * spacing / 2);
             rowUpgrades.forEach((upgrade, index) => {
-                this.shopCards.push(this.createMainMenuUpgradeCard(startX + (index * spacing), row.y, upgrade));
+                this.shopCards.push(this.createMainMenuUpgradeCard(startX + (index * spacing), row.y, upgrade, compact));
             });
         });
 
@@ -1695,32 +1697,40 @@ class PermaUpgradeScene extends Phaser.Scene {
         this.updateUpgradeShop();
     }
 
-    createMainMenuUpgradeCard(x, y, upgrade) {
-        const card = createPanel(this, x, y, 220, 126, 0x1a2233, 0x4c5d83, 0.98).setInteractive({ useHandCursor: true });
-        const name = this.add.text(x - 94, y - 46, upgrade.name, {
-            fontSize: upgrade.name.length > 12 ? '14px' : '16px',
+    createMainMenuUpgradeCard(x, y, upgrade, compact = false) {
+        const cardWidth = compact ? 168 : 220;
+        const left = x - (cardWidth / 2) + 16;
+        const textWidth = cardWidth - 28;
+        const card = createPanel(this, x, y, cardWidth, 126, 0x1a2233, 0x4c5d83, 0.98).setInteractive({ useHandCursor: true });
+        const name = this.add.text(left, y - 46, upgrade.name, {
+            fontSize: compact ? (upgrade.name.length > 11 ? '12px' : '14px') : (upgrade.name.length > 12 ? '14px' : '16px'),
             fill: '#fff7e6',
-            fontFamily: 'Arial Black'
+            fontFamily: 'Arial Black',
+            wordWrap: { width: textWidth, useAdvancedWrap: true }
         }).setOrigin(0, 0.5);
-        const effect = this.add.text(x - 94, y - 18, '', {
-            fontSize: '12px',
-            fill: '#9bd2ff'
+        const effect = this.add.text(left, y - 18, '', {
+            fontSize: compact ? '10px' : '12px',
+            fill: '#9bd2ff',
+            wordWrap: { width: textWidth, useAdvancedWrap: true }
         }).setOrigin(0, 0.5);
-        const status = this.add.text(x - 94, y + 10, '', {
-            fontSize: '12px',
-            fill: '#c7d4ec'
+        const status = this.add.text(left, y + 10, '', {
+            fontSize: compact ? '10px' : '12px',
+            fill: '#c7d4ec',
+            wordWrap: { width: textWidth, useAdvancedWrap: true }
         }).setOrigin(0, 0.5);
-        const costBox = this.add.rectangle(x + 64, y + 36, 74, 36, 0x0d1725, 0.92).setStrokeStyle(1, 0x526481);
-        const cost = this.add.text(x + 64, y + 36, '', {
-            fontSize: '11px',
+        const costBoxX = x + (cardWidth / 2) - (compact ? 40 : 46);
+        const costBox = this.add.rectangle(costBoxX, y + 36, compact ? 64 : 74, 36, 0x0d1725, 0.92).setStrokeStyle(1, 0x526481);
+        const cost = this.add.text(costBoxX, y + 36, '', {
+            fontSize: compact ? '9px' : '11px',
             fill: '#ffe4a3',
             fontFamily: 'Arial Black',
             align: 'center'
         }).setOrigin(0.5);
-        const cta = this.add.text(x - 94, y + 46, '', {
-            fontSize: '11px',
+        const cta = this.add.text(left, y + 46, '', {
+            fontSize: compact ? '9px' : '11px',
             fill: '#8fa1bd',
-            fontFamily: 'Arial Black'
+            fontFamily: 'Arial Black',
+            wordWrap: { width: compact ? 86 : 120, useAdvancedWrap: true }
         }).setOrigin(0, 0.5);
         const select = () => this.buyPermaUpgrade(upgrade.id);
         [card, name, effect, status, costBox, cost, cta].forEach(item => {
@@ -1728,7 +1738,7 @@ class PermaUpgradeScene extends Phaser.Scene {
             item.on?.('pointerdown', select);
             item.on?.('pointerover', () => this.showUpgradeDetails(upgrade));
         });
-        return { card, name, effect, status, costBox, cost, cta, upgrade };
+        return { card, name, effect, status, costBox, cost, cta, upgrade, compact };
     }
 
     drawTreeConnections() {
@@ -1802,7 +1812,7 @@ class PermaUpgradeScene extends Phaser.Scene {
             const cost = getPermaUpgradeCost(node.upgrade);
             const canBuy = canBuyPermaUpgrade(node.upgrade);
             const isMaxed = level >= node.upgrade.maxLevel;
-            node.effect.setText(`Each level: ${node.upgrade.effectText}`);
+            node.effect.setText(node.compact ? `${node.upgrade.effectText} / level` : `Each level: ${node.upgrade.effectText}`);
             node.status.setText(`Owned: ${level} levels`);
             node.cost.setText(isMaxed ? 'MAX' : `Next\n${cost} TP`);
             node.cta.setText(isMaxed ? 'MAXED OUT' : canBuy ? 'CLICK TO BUY' : 'NEED MORE TAPIOCA');
@@ -1834,7 +1844,7 @@ class PermaUpgradeScene extends Phaser.Scene {
             ? 'Requires: ' + upgrade.requires.map(id => getPermaUpgrade(id)?.name || id).join(', ')
             : 'No prerequisite';
         const cost = getPermaUpgradeCost(upgrade);
-        this.detailText.setText(`${upgrade.name}: ${upgrade.desc}   |   Next ${cost} TP   |   ${requires}`);
+        this.detailText.setText(`${upgrade.name}: permanent ${upgrade.desc}   |   Next ${cost} TP   |   ${requires}`);
     }
 
     buyPermaUpgrade(id) {
@@ -2094,6 +2104,7 @@ class GameScene extends Phaser.Scene {
         this.permaEarlyWaveRageBonus = 0;
         this.permaRageBonusPercent = 0;
         this.permaXpBonusPercent = 0;
+        this.permaReloadSpeedBonus = 0;
         this.playerDown = false;
         this.runEnded = false;
         this.deathTransitionPending = false;
@@ -2235,7 +2246,7 @@ class GameScene extends Phaser.Scene {
         this.maxBobaCount = 5 + this.permaMaxAmmoBonus;
         this.bobaCount = this.maxBobaCount;
         this.isReloading = false;
-        this.reloadDuration = 1000;
+        this.reloadDuration = Math.max(250, Math.floor(1000 / (1 + this.permaReloadSpeedBonus)));
     }
 
     createHud() {
@@ -2299,9 +2310,9 @@ class GameScene extends Phaser.Scene {
         this.enemiesPerWave = 8 + (GameState.wave * 3);
         this.enemiesSpawnedThisWave = 0;
         this.enemiesKilledThisWave = 0;
-        this.maxActiveEnemies = Math.min(24, 3 + Math.floor(GameState.wave * 1.25));
-        const waveSpawnDelay = Math.max(220, 1500 - (waveIndex * 85));
-        this.spawnDelay = GameState.wave >= 10 ? Math.max(110, Math.floor(waveSpawnDelay / 2)) : waveSpawnDelay;
+        this.maxActiveEnemies = Math.min(40, 5 + Math.floor(GameState.wave * 1.7));
+        const waveSpawnDelay = Math.max(130, 950 - (waveIndex * 70));
+        this.spawnDelay = GameState.wave >= 10 ? Math.max(65, Math.floor(waveSpawnDelay / 2)) : waveSpawnDelay;
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.delay = this.spawnDelay;
             this.enemySpawnTimer.paused = false;

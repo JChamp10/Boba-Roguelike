@@ -65,7 +65,15 @@
             }
 
             window.addEventListener('error', function (event) {
-                setBootStatus('BOOT ERROR: ' + (event.message || 'CHECK CONSOLE'));
+                var filename = event.filename ? String(event.filename).split('/').pop() : '';
+                var location = filename ? ' @ ' + filename + ':' + event.lineno : '';
+                setBootStatus('BOOT ERROR: ' + (event.message || 'CHECK CONSOLE') + location);
+            });
+
+            window.addEventListener('unhandledrejection', function (event) {
+                var reason = event.reason || {};
+                var message = reason.message || reason.stack || String(reason);
+                setBootStatus('BOOT ERROR: ' + (message || 'PROMISE REJECTION'));
             });
 
             function loadScript(src, done) {
@@ -81,11 +89,11 @@
 
             function loadGame() {
                 setBootStatus('STARTING GAME...');
-                loadScript('js/game.js?v=82');
+                loadScript('js/game.js?v=' + Date.now());
             }
 
             setBootStatus('LOADING EMBEDDED ASSETS...');
-            loadScript('js/embedded-assets.js?v=3', loadGame);
+            loadScript('js/embedded-assets.js?v=' + Date.now(), loadGame);
         }());
     </script>
 
