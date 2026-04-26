@@ -76,11 +76,20 @@
                 setBootStatus('BOOT ERROR: ' + (message || 'PROMISE REJECTION'));
             });
 
-            function loadScript(src, done) {
+            function withCacheBust(src) {
+                return window.location.protocol === 'file:' ? src : src + '?v=' + Date.now();
+            }
+
+            function loadScript(src, done, retrySrc) {
                 var script = document.createElement('script');
                 script.src = src;
                 script.onload = done;
                 script.onerror = function () {
+                    if (retrySrc) {
+                        script.remove();
+                        loadScript(retrySrc, done);
+                        return;
+                    }
                     setBootStatus('FAILED TO LOAD ' + src);
                     if (done) done();
                 };
@@ -89,11 +98,11 @@
 
             function loadGame() {
                 setBootStatus('STARTING GAME...');
-                loadScript('js/game.js?v=' + Date.now());
+                loadScript(withCacheBust('js/game.js'), null, 'js/game.js');
             }
 
             setBootStatus('LOADING EMBEDDED ASSETS...');
-            loadScript('js/embedded-assets.js?v=' + Date.now(), loadGame);
+            loadScript(withCacheBust('js/embedded-assets.js'), loadGame, 'js/embedded-assets.js');
         }());
     </script>
 
