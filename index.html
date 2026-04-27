@@ -76,33 +76,65 @@
                 setBootStatus('BOOT ERROR: ' + (message || 'PROMISE REJECTION'));
             });
 
-            function withCacheBust(src) {
-                return window.location.protocol === 'file:' ? src : src + '?v=' + Date.now();
+            var githubCdnBase = 'https://cdn.jsdelivr.net/gh/JChamp10/Boba-Roguelike@main/';
+
+            function absoluteUrl(src) {
+                return new URL(src, document.baseURI || window.location.href).href;
             }
 
-            function loadScript(src, done, retrySrc) {
-                var script = document.createElement('script');
-                script.src = src;
-                script.onload = done;
-                script.onerror = function () {
-                    if (retrySrc) {
-                        script.remove();
-                        loadScript(retrySrc, done);
+            function withCacheBust(src) {
+                if (window.location.protocol === 'file:') return src;
+                var separator = src.indexOf('?') === -1 ? '?' : '&';
+                return src + separator + 'v=' + Date.now();
+            }
+
+            function scriptSources(src) {
+                var sources = [withCacheBust(src), src];
+
+                if (window.location.protocol !== 'file:') {
+                    sources.push(withCacheBust(githubCdnBase + src));
+                    sources.push(githubCdnBase + src);
+                }
+
+                return sources.filter(function (source, index) {
+                    return sources.indexOf(source) === index;
+                });
+            }
+
+            function loadScript(src, done) {
+                var sources = Array.isArray(src) ? src.slice() : [src];
+                var attempt = 0;
+
+                function tryNext() {
+                    var source = sources[attempt++];
+                    var displaySource = source ? absoluteUrl(source) : absoluteUrl(sources[sources.length - 1]);
+
+                    if (!source) {
+                        setBootStatus('FAILED TO LOAD ' + displaySource);
+                        if (done) done();
                         return;
                     }
-                    setBootStatus('FAILED TO LOAD ' + src);
-                    if (done) done();
-                };
-                document.body.appendChild(script);
+
+                    var script = document.createElement('script');
+                    script.src = source;
+                    script.onload = done;
+                    script.onerror = function () {
+                        script.remove();
+                        tryNext();
+                    };
+                    document.body.appendChild(script);
+                }
+
+                tryNext();
             }
 
             function loadGame() {
                 setBootStatus('STARTING GAME...');
-                loadScript(withCacheBust('js/game.js'), null, 'js/game.js');
+                loadScript(scriptSources('js/game.js'));
             }
 
             setBootStatus('LOADING EMBEDDED ASSETS...');
-            loadScript(withCacheBust('js/embedded-assets.js'), loadGame, 'js/embedded-assets.js');
+            loadScript(scriptSources('js/embedded-assets.js'), loadGame);
         }());
     </script>
 
