@@ -334,6 +334,90 @@ const CHARACTER_PATHS = {
     3: { id: 'brownSugar', label: 'Brown Sugar Rush' }
 };
 
+const BOBA_THEME = {
+    ink: 0x090b12,
+    plum: 0x17111f,
+    glass: 0x141821,
+    glassDeep: 0x0d111a,
+    cream: 0xffe7b3,
+    white: 0xfff7e6,
+    muted: 0xb8afa3,
+    bobaBrown: 0x5a2d1d,
+    caramel: 0xf6b84b,
+    lychee: 0xff5fa2,
+    taro: 0xb36bff,
+    matcha: 0x7cff8a,
+    aqua: 0x38d9ff,
+    danger: 0xff3b4f
+};
+
+const BRANCH_VISUALS = {
+    damage: { accent: BOBA_THEME.lychee, glow: 0x4a1026, label: 'LYCHEE IMPACT' },
+    speed: { accent: BOBA_THEME.aqua, glow: 0x063746, label: 'SUGAR RUSH' },
+    health: { accent: BOBA_THEME.matcha, glow: 0x123a20, label: 'MATCHA GUARD' },
+    pierce: { accent: BOBA_THEME.taro, glow: 0x2b1543, label: 'TARO STRAW' },
+    bounce: { accent: BOBA_THEME.caramel, glow: 0x422d08, label: 'CARAMEL RICOCHET' },
+    shot: { accent: BOBA_THEME.lychee, glow: 0x3f1426, label: 'PEARL STORM' },
+    machine: { accent: BOBA_THEME.caramel, glow: 0x30200a, label: 'SHOP MACHINE' },
+    boost: { accent: BOBA_THEME.cream, glow: 0x33240f, label: 'STAMP CARD' },
+    runboost: { accent: BOBA_THEME.danger, glow: 0x3d080e, label: 'RUN BOOST' },
+    evolution: { accent: BOBA_THEME.taro, glow: 0x2e1749, label: 'NEON EVOLUTION' }
+};
+
+const UPGRADE_CARD_ASSETS = [
+    'machine-ballRoller', 'machine-ballMaker', 'machine-megaPress', 'machine-quantumGen',
+    'tech-factoryUpgrade', 'tech-speedLine', 'tech-moreLabors', 'tech-hugePress', 'tech-tapiocaAtomizer',
+    'evolution-factory',
+    'damage1', 'damage2', 'damage3', 'damage4', 'damage5',
+    'speed1', 'speed2', 'speed3', 'speed4', 'speed5',
+    'health1', 'health2', 'health3', 'health4', 'health5',
+    'pierce1', 'pierce2', 'pierce3', 'pierce4', 'pierce5',
+    'bounce1', 'bounce2', 'bounce3', 'bounce4', 'bounce5',
+    'shot1', 'shot2', 'shot3', 'shot4', 'shot5',
+    'boost-speed', 'boost-damage', 'boost-health', 'boost-reload', 'boost-ammo',
+    'runboost-rage', 'runboost-damage', 'runboost-xp'
+].map(id => ({
+    id,
+    key: `upgrade-card-${id}`,
+    path: `assets/UpgradeCards/${id}.png`
+}));
+
+const PERMA_UPGRADE_CARD_IDS = {
+    menuSpeed: 'boost-speed',
+    menuDamage: 'boost-damage',
+    menuReload: 'boost-reload',
+    menuHealth: 'boost-health',
+    menuAmmo: 'boost-ammo',
+    menuRageBonus: 'runboost-rage',
+    menuRunDamage: 'runboost-damage',
+    menuXpBonus: 'runboost-xp'
+};
+
+const PERMA_STORE_VISUALS = {
+    menuSpeed: { theme: 'speed', tag: 'BOOST', icon: 'SPD', main: '+1%', sub: 'Speed per level' },
+    menuDamage: { theme: 'damage', tag: 'BOOST', icon: 'DMG', main: '+1%', sub: 'Damage per level' },
+    menuReload: { theme: 'speed', tag: 'BOOST', icon: 'RLD', main: '+1%', sub: 'Reload per level' },
+    menuHealth: { theme: 'health', tag: 'BOOST', icon: 'HP', main: '+1', sub: 'Max HP per level' },
+    menuAmmo: { theme: 'machine', tag: 'BOOST', icon: 'AMMO', main: '+1', sub: 'Ammo per level' },
+    menuRageBonus: { theme: 'runboost', tag: 'RUN BOOST', icon: 'RAGE', main: '+2%', sub: 'Rage gain' },
+    menuRunDamage: { theme: 'damage', tag: 'RUN BOOST', icon: 'DMG', main: '+1%', sub: 'Run damage' },
+    menuXpBonus: { theme: 'speed', tag: 'RUN BOOST', icon: 'XP', main: '+5%', sub: 'XP gain' }
+};
+
+function getUpgradeVisualTheme(upgradeOrBranch) {
+    const branch = typeof upgradeOrBranch === 'string' ? upgradeOrBranch : upgradeOrBranch?.branch;
+    return BRANCH_VISUALS[branch] || BRANCH_VISUALS.boost;
+}
+
+function getUpgradeCardAsset(id) {
+    return UPGRADE_CARD_ASSETS.find(asset => asset.id === id);
+}
+
+function getUpgradeCardAssetForUpgrade(upgrade) {
+    if (!upgrade) return null;
+    return getUpgradeCardAsset(PERMA_UPGRADE_CARD_IDS[upgrade.id] || upgrade.id);
+}
+
 function getUpgradePickCount(id) {
     return GameState.selectedUpgrades.filter(upgradeId => upgradeId === id).length;
 }
@@ -718,10 +802,113 @@ function drawSceneBackdrop(scene, accentColor = 0x2b3357) {
     }
 }
 
-function createPanel(scene, x, y, width, height, fill = 0x171d2d, stroke = 0x425072, alpha = 0.96) {
+function createPanel(scene, x, y, width, height, fill = BOBA_THEME.glass, stroke = BOBA_THEME.aqua, alpha = 0.96) {
     const panel = scene.add.rectangle(x, y, width, height, fill, alpha);
     panel.setStrokeStyle(2, stroke);
     return panel;
+}
+
+function createNeonPanel(scene, x, y, width, height, theme = BRANCH_VISUALS.boost, alpha = 0.94) {
+    scene.add.rectangle(x, y, width + 10, height + 10, theme.accent, 0.08);
+    scene.add.rectangle(x, y, width + 4, height + 4, theme.glow, 0.62);
+    const panel = createPanel(scene, x, y, width, height, BOBA_THEME.glass, theme.accent, alpha);
+    scene.add.rectangle(x, y - (height / 2) + 8, width - 18, 2, theme.accent, 0.55);
+    scene.add.rectangle(x, y + (height / 2) - 8, width - 18, 2, theme.accent, 0.28);
+    return panel;
+}
+
+function addFlavorBadge(scene, x, y, text, theme, width = 116) {
+    const badge = scene.add.rectangle(x, y, width, 20, theme.glow, 0.92).setStrokeStyle(1, theme.accent, 0.8);
+    const label = scene.add.text(x, y, text, {
+        fontSize: '10px',
+        fill: '#fff7e6',
+        fontFamily: 'Arial Black',
+        align: 'center'
+    }).setOrigin(0.5);
+    return { badge, label };
+}
+
+function addUpgradeCardArt(scene, x, y, upgrade, width, height, alpha = 1) {
+    const asset = getUpgradeCardAssetForUpgrade(upgrade);
+    if (!asset || !scene.textures.exists(asset.key)) return null;
+    return scene.add.image(x, y, asset.key).setDisplaySize(width, height).setAlpha(alpha);
+}
+
+function createPermanentStoreCard(scene, x, y, upgrade, width, height) {
+    const visual = PERMA_STORE_VISUALS[upgrade.id] || {
+        theme: isTemporaryPerRunUpgrade(upgrade.id) ? 'runboost' : 'boost',
+        tag: isTemporaryPerRunUpgrade(upgrade.id) ? 'RUN BOOST' : 'BOOST',
+        icon: upgrade.icon,
+        main: upgrade.effectText,
+        sub: 'per level'
+    };
+    const theme = getUpgradeVisualTheme(visual.theme);
+    const container = scene.add.container(x, y);
+    const g = scene.add.graphics();
+    const left = -width / 2;
+    const top = -height / 2;
+
+    g.fillStyle(0x07090f, 0.98);
+    g.fillRoundedRect(left, top, width, height, 6);
+    g.lineStyle(3, theme.accent, 1);
+    g.strokeRoundedRect(left + 1, top + 1, width - 2, height - 2, 6);
+    g.fillStyle(theme.glow, 0.96);
+    g.fillRoundedRect(left + 8, top + 8, width - 16, 28, 4);
+    g.lineStyle(1, BOBA_THEME.caramel, 0.72);
+    g.strokeRoundedRect(left + 8, top + 8, width - 16, 28, 4);
+    g.fillStyle(theme.accent, 0.16);
+    g.fillCircle(0, top + 92, 42);
+    g.lineStyle(2, theme.accent, 0.62);
+    g.strokeCircle(0, top + 92, 42);
+    g.fillStyle(BOBA_THEME.glassDeep, 0.98);
+    g.fillRoundedRect(left + 12, top + 142, width - 24, 32, 5);
+    g.lineStyle(1, theme.accent, 0.42);
+    g.strokeRoundedRect(left + 12, top + 142, width - 24, 32, 5);
+
+    const tag = scene.add.text(0, top + 22, visual.tag, {
+        fontSize: '12px',
+        fill: '#ffe7b3',
+        fontFamily: 'Arial Black',
+        align: 'center'
+    }).setOrigin(0.5);
+    const name = scene.add.text(0, top + 54, upgrade.name, {
+        fontSize: upgrade.name.length > 13 ? '13px' : '15px',
+        fill: '#fff7e6',
+        fontFamily: 'Arial Black',
+        align: 'center',
+        wordWrap: { width: width - 18, useAdvancedWrap: true }
+    }).setOrigin(0.5);
+    const icon = scene.add.text(0, top + 92, visual.icon, {
+        fontSize: visual.icon.length > 3 ? '20px' : '27px',
+        fill: '#fff7e6',
+        fontFamily: 'Arial Black',
+        align: 'center'
+    }).setOrigin(0.5);
+    const main = scene.add.text(0, top + 128, visual.main, {
+        fontSize: '24px',
+        fill: '#f6b84b',
+        fontFamily: 'Arial Black',
+        align: 'center'
+    }).setOrigin(0.5);
+    const sub = scene.add.text(0, top + 158, visual.sub, {
+        fontSize: '11px',
+        fill: '#fff7e6',
+        fontFamily: 'Arial Black',
+        align: 'center',
+        wordWrap: { width: width - 26, useAdvancedWrap: true }
+    }).setOrigin(0.5);
+    const level = scene.add.text(0, top + height - 20, '', {
+        fontSize: '10px',
+        fill: '#b8afa3',
+        fontFamily: 'Arial Black',
+        align: 'center'
+    }).setOrigin(0.5);
+
+    container.add([g, tag, name, icon, main, sub, level]);
+    container.setSize(width, height);
+    container.setInteractive({ useHandCursor: true });
+    container.levelText = level;
+    return container;
 }
 
 function getImageSource(path) {
@@ -762,7 +949,8 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'upgrade-damage', path: 'assets/Boba_Upgrades/upgrade-damage.png' },
     { key: 'upgrade-health', path: 'assets/Boba_Upgrades/upgrade-health.png' },
     { key: 'upgrade-pierce', path: 'assets/Boba_Upgrades/upgrade-pierce.png' },
-    { key: 'upgrade-bounce', path: 'assets/Boba_Upgrades/upgrade-bounce.png' }
+    { key: 'upgrade-bounce', path: 'assets/Boba_Upgrades/upgrade-bounce.png' },
+    ...UPGRADE_CARD_ASSETS.map(asset => ({ key: asset.key, path: asset.path }))
 ];
 
 // ============================================
@@ -1009,30 +1197,30 @@ class BootScene extends Phaser.Scene {
     createTextures() {
         // Enemy health bar
         const enemyHealthG = this.add.graphics();
-        enemyHealthG.fillStyle(0x333333);
+        enemyHealthG.fillStyle(BOBA_THEME.glassDeep);
         enemyHealthG.fillRect(0, 0, 30, 4);
         enemyHealthG.generateTexture('enemy_health_bg', 30, 4);
-        enemyHealthG.fillStyle(0xff0000);
+        enemyHealthG.fillStyle(BOBA_THEME.danger);
         enemyHealthG.fillRect(0, 0, 30, 4);
         enemyHealthG.generateTexture('enemy_health_fill', 30, 4);
         enemyHealthG.destroy();
 
         // Health bar segments
         const healthG = this.add.graphics();
-        healthG.fillStyle(0x333333);
+        healthG.fillStyle(BOBA_THEME.glassDeep);
         healthG.fillRect(0, 0, 200, 20);
         healthG.generateTexture('health_bg', 200, 20);
-        healthG.fillStyle(0xff0000);
+        healthG.fillStyle(BOBA_THEME.danger);
         healthG.fillRect(0, 0, 200, 20);
         healthG.generateTexture('health_fill', 200, 20);
         healthG.destroy();
 
         // XP bar
         const xpG = this.add.graphics();
-        xpG.fillStyle(0x333333);
+        xpG.fillStyle(BOBA_THEME.glassDeep);
         xpG.fillRect(0, 0, 200, 12);
         xpG.generateTexture('xp_bg', 200, 12);
-        xpG.fillStyle(0x3498db);
+        xpG.fillStyle(BOBA_THEME.aqua);
         xpG.fillRect(0, 0, 200, 12);
         xpG.generateTexture('xp_fill', 200, 12);
         xpG.destroy();
@@ -1049,11 +1237,16 @@ class BootScene extends Phaser.Scene {
 
         // UI elements
         const btnG = this.add.graphics();
-        btnG.fillStyle(0x444444);
+        btnG.fillStyle(BOBA_THEME.glass);
         btnG.fillRoundedRect(0, 0, 200, 50, 8);
+        btnG.lineStyle(2, BOBA_THEME.caramel, 0.9);
+        btnG.strokeRoundedRect(1, 1, 198, 48, 8);
         btnG.generateTexture('btn', 200, 50);
-        btnG.fillStyle(0x666666);
+        btnG.clear();
+        btnG.fillStyle(0x241923);
         btnG.fillRoundedRect(0, 0, 200, 50, 8);
+        btnG.lineStyle(3, BOBA_THEME.aqua, 1);
+        btnG.strokeRoundedRect(1, 1, 198, 48, 8);
         btnG.generateTexture('btn_hover', 200, 50);
         btnG.destroy();
 
@@ -1723,10 +1916,6 @@ class PermaUpgradeScene extends Phaser.Scene {
         SaveManager.load();
         drawSceneBackdrop(this, 0x476b86);
 
-        createPanel(this, GAME_CENTER_X, 70, 760, 88, 0x101826, 0x536784, 0.95);
-        createPanel(this, GAME_CENTER_X, 360, 890, 500, 0x111827, 0x536784, 0.96);
-        createPanel(this, GAME_CENTER_X, 640, 860, 76, 0x101826, 0x536784, 0.95);
-
         this.add.text(GAME_CENTER_X, 48, 'MAIN MENU UPGRADES', {
             fontSize: '34px',
             fill: '#fff4d6',
@@ -1739,36 +1928,29 @@ class PermaUpgradeScene extends Phaser.Scene {
             align: 'center'
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 130, 'TP means tapioca. Click any card to buy one permanent level for future runs.', {
-            fontSize: '14px',
-            fill: '#9fb3d9'
-        }).setOrigin(0.5);
-
-        this.add.text(GAME_CENTER_X, 175, 'PERMANENT SMALL BOOSTS', { fontSize: '19px', fill: '#74d39a', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.add.text(GAME_CENTER_X, 372, 'PER-RUN BOOSTS', { fontSize: '19px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
-
         this.shopCards = [];
         [
-            { branch: 'Small Boosts', y: 260 },
-            { branch: 'Per-Run Boosts', y: 455 }
+            { branch: 'Small Boosts', y: 245 },
+            { branch: 'Per-Run Boosts', y: 520 }
         ].forEach(row => {
             const rowUpgrades = PERMA_UPGRADES.filter(upgrade => upgrade.branch === row.branch);
             const compact = rowUpgrades.length >= 5;
-            const spacing = compact ? 178 : 280;
+            const spacing = compact ? 188 : 220;
             const startX = GAME_CENTER_X - ((rowUpgrades.length - 1) * spacing / 2);
             rowUpgrades.forEach((upgrade, index) => {
                 this.shopCards.push(this.createMainMenuUpgradeCard(startX + (index * spacing), row.y, upgrade, compact));
             });
         });
 
-        this.detailText = this.add.text(GAME_CENTER_X, 595, '', {
+        this.detailText = this.add.text(GAME_CENTER_X, 690, '', {
             fontSize: '14px',
-            fill: '#f3d7df',
+            fill: '#ffe7b3',
+            fontFamily: 'Arial Black',
             align: 'center'
         }).setOrigin(0.5);
 
-        this.makeActionButton(220, 640, 'BACK', () => this.scene.start('MenuScene'));
-        this.makeActionButton(780, 640, 'START RUN', () => {
+        this.makeActionButton(220, 740, 'BACK', () => this.scene.start('MenuScene'));
+        this.makeActionButton(780, 740, 'START RUN', () => {
             GameState.reset();
             this.scene.start('GameScene');
         });
@@ -1777,47 +1959,34 @@ class PermaUpgradeScene extends Phaser.Scene {
     }
 
     createMainMenuUpgradeCard(x, y, upgrade, compact = false) {
-        const cardWidth = compact ? 168 : 220;
-        const left = x - (cardWidth / 2) + 16;
-        const textWidth = cardWidth - 28;
-        const card = createPanel(this, x, y, cardWidth, 126, 0x1a2233, 0x4c5d83, 0.98).setInteractive({ useHandCursor: true });
-        const name = this.add.text(left, y - 46, upgrade.name, {
-            fontSize: compact ? (upgrade.name.length > 11 ? '12px' : '14px') : (upgrade.name.length > 12 ? '14px' : '16px'),
-            fill: '#fff7e6',
-            fontFamily: 'Arial Black',
-            wordWrap: { width: textWidth, useAdvancedWrap: true }
-        }).setOrigin(0, 0.5);
-        const effect = this.add.text(left, y - 18, '', {
-            fontSize: compact ? '10px' : '12px',
-            fill: '#9bd2ff',
-            wordWrap: { width: textWidth, useAdvancedWrap: true }
-        }).setOrigin(0, 0.5);
-        const status = this.add.text(left, y + 10, '', {
-            fontSize: compact ? '10px' : '12px',
-            fill: '#c7d4ec',
-            wordWrap: { width: textWidth, useAdvancedWrap: true }
-        }).setOrigin(0, 0.5);
-        const costBoxX = x + (cardWidth / 2) - (compact ? 40 : 46);
-        const costBox = this.add.rectangle(costBoxX, y + 36, compact ? 64 : 74, 36, 0x0d1725, 0.92).setStrokeStyle(1, 0x526481);
-        const cost = this.add.text(costBoxX, y + 36, '', {
-            fontSize: compact ? '9px' : '11px',
-            fill: '#ffe4a3',
+        const cardWidth = compact ? 142 : 156;
+        const cardHeight = compact ? 190 : 178;
+        const card = createPermanentStoreCard(this, x, y, upgrade, cardWidth, cardHeight);
+        card.setInteractive({ useHandCursor: true });
+        const priceTagY = y + (cardHeight / 2) + 24;
+        const priceTag = this.add.text(x, priceTagY, '', {
+            fontSize: '14px',
+            fill: '#ffe7b3',
             fontFamily: 'Arial Black',
             align: 'center'
-        }).setOrigin(0.5);
-        const cta = this.add.text(left, y + 46, '', {
-            fontSize: compact ? '9px' : '11px',
-            fill: '#8fa1bd',
-            fontFamily: 'Arial Black',
-            wordWrap: { width: compact ? 86 : 120, useAdvancedWrap: true }
-        }).setOrigin(0, 0.5);
+        }).setOrigin(0.5).setVisible(false);
         const select = () => this.buyPermaUpgrade(upgrade.id);
-        [card, name, effect, status, costBox, cost, cta].forEach(item => {
-            item.setInteractive?.({ useHandCursor: true });
-            item.on?.('pointerdown', select);
-            item.on?.('pointerover', () => this.showUpgradeDetails(upgrade));
+        card.on('pointerdown', select);
+        card.on('pointerover', () => {
+            const level = getPermaUpgradeLevel(upgrade.id);
+            const isMaxed = level >= upgrade.maxLevel;
+            const cost = getPermaUpgradeCost(upgrade);
+            priceTag.setText(isMaxed ? 'MAXED' : `${cost} TP`).setVisible(true);
+            card.setScale(1.055);
+            card.setAlpha(1);
+            this.showUpgradeDetails(upgrade);
         });
-        return { card, name, effect, status, costBox, cost, cta, upgrade, compact };
+        card.on('pointerout', () => {
+            priceTag.setVisible(false);
+            card.setScale(1);
+            this.hideUpgradeDetails();
+        });
+        return { card, priceTag, upgrade, compact, cardWidth, cardHeight };
     }
 
     drawTreeConnections() {
@@ -1885,37 +2054,27 @@ class PermaUpgradeScene extends Phaser.Scene {
     }
 
     updateUpgradeShop() {
-        this.summaryText.setText(`TAPIOCA ${Math.floor(GameState.tapioca)}   |   Click a card to spend TP on one level   |   Boba Evolutions later`);
+        this.summaryText.setText(`TAPIOCA ${Math.floor(GameState.tapioca)}   |   Hover a card to see price   |   Click to buy one level`);
         this.shopCards.forEach(node => {
             const level = getPermaUpgradeLevel(node.upgrade.id);
-            const cost = getPermaUpgradeCost(node.upgrade);
             const canBuy = canBuyPermaUpgrade(node.upgrade);
             const isMaxed = level >= node.upgrade.maxLevel;
-            node.effect.setText(node.compact ? `${node.upgrade.effectText} / level` : `Each level: ${node.upgrade.effectText}`);
-            node.status.setText(`${isTemporaryPerRunUpgrade(node.upgrade.id) ? 'Queued' : 'Owned'}: ${level} levels`);
-            node.cost.setText(isMaxed ? 'MAX' : `Next\n${cost} TP`);
-            node.cta.setText(isMaxed ? 'MAXED OUT' : canBuy ? 'CLICK TO BUY' : 'NEED MORE TAPIOCA');
+            node.card.levelText?.setText(`${isTemporaryPerRunUpgrade(node.upgrade.id) ? 'Queued' : 'Owned'} ${level}`);
             if (isMaxed) {
-                node.card.setFillStyle(0x284234, 0.98);
-                node.card.setStrokeStyle(2, 0x5fe08c);
-                node.costBox.setFillStyle(0x102418, 0.92);
-                node.cost.setColor('#aef1c0');
-                node.cta.setColor('#aef1c0');
+                node.card.clearTint?.();
+                node.card.setAlpha(0.86);
+                node.priceTag.setColor('#aef1c0');
             } else if (canBuy) {
-                node.card.setFillStyle(0x26304a, 0.98);
-                node.card.setStrokeStyle(2, 0xffd700);
-                node.costBox.setFillStyle(0x271f0b, 0.92);
-                node.cost.setColor('#ffe4a3');
-                node.cta.setColor('#ffe4a3');
+                node.card.clearTint?.();
+                node.card.setAlpha(0.98);
+                node.priceTag.setColor('#ffe4a3');
             } else {
-                node.card.setFillStyle(0x1b1e2a, 0.98);
-                node.card.setStrokeStyle(2, 0x485066);
-                node.costBox.setFillStyle(0x0d1725, 0.92);
-                node.cost.setColor('#7f8da7');
-                node.cta.setColor('#7f8da7');
+                node.card.clearTint?.();
+                node.card.setAlpha(0.5);
+                node.priceTag.setColor('#ff8e8e');
             }
         });
-        this.showUpgradeDetails(PERMA_UPGRADES[0]);
+        this.hideUpgradeDetails();
     }
 
     showUpgradeDetails(upgrade) {
@@ -1924,7 +2083,12 @@ class PermaUpgradeScene extends Phaser.Scene {
             : 'No prerequisite';
         const cost = getPermaUpgradeCost(upgrade);
         const duration = isTemporaryPerRunUpgrade(upgrade.id) ? 'next run only' : 'permanent';
-        this.detailText.setText(`${upgrade.name}: ${duration} ${upgrade.desc}   |   Next ${cost} TP   |   ${requires}`);
+        const level = getPermaUpgradeLevel(upgrade.id);
+        this.detailText.setText(`${upgrade.name}: ${duration} ${upgrade.desc}   |   Owned ${level}   |   Next ${cost} TP   |   ${requires}`);
+    }
+
+    hideUpgradeDetails() {
+        this.detailText.setText('');
     }
 
     buyPermaUpgrade(id) {
@@ -2375,36 +2539,38 @@ class GameScene extends Phaser.Scene {
     }
 
     createHud() {
-        createPanel(this, 112, 130, 208, 146, 0x151b2b, 0x425072, 0.82).setDepth(4);
-        createPanel(this, GAME_WIDTH - 96, 76, 176, 118, 0x151b2b, 0x425072, 0.82).setDepth(4);
-        createPanel(this, GAME_CENTER_X, 24, 240, 36, 0x151b2b, 0x7a4f83, 0.82).setDepth(4);
-        this.bobaCountText = this.add.text(16, 80, '', { fontSize: '14px', fill: '#fff' }).setOrigin(0, 0.5);
-        this.reloadText = this.add.text(16, 98, 'RELOADING...', { fontSize: '10px', fill: '#ff6600' }).setOrigin(0, 0.5);
+        createNeonPanel(this, 118, 140, 220, 156, BRANCH_VISUALS.machine, 0.84).setDepth(4);
+        createNeonPanel(this, GAME_WIDTH - 98, 78, 184, 122, BRANCH_VISUALS.speed, 0.84).setDepth(4);
+        createNeonPanel(this, GAME_CENTER_X, 24, 284, 36, BRANCH_VISUALS.evolution, 0.84).setDepth(4);
+        addFlavorBadge(this, 118, 70, 'NEON BOBA POS', BRANCH_VISUALS.machine, 138);
+        addFlavorBadge(this, GAME_WIDTH - 98, 18, 'ORDER BOARD', BRANCH_VISUALS.speed, 116);
+        this.bobaCountText = this.add.text(18, 80, '', { fontSize: '14px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.reloadText = this.add.text(18, 98, 'RELOADING...', { fontSize: '10px', fill: '#f6b84b', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
         this.reloadText.setVisible(false);
-        this.playerStateText = this.add.text(16, 116, '', { fontSize: '12px', fill: '#ffcc66' }).setOrigin(0, 0.5);
-        this.rageText = this.add.text(16, 138, '', { fontSize: '14px', fill: '#ff6666' }).setOrigin(0, 0.5);
-        this.tcText = this.add.text(16, 158, '', { fontSize: '14px', fill: '#66ccff' }).setOrigin(0, 0.5);
-        this.outputText = this.add.text(16, 178, '', { fontSize: '13px', fill: '#ffe9a6' }).setOrigin(0, 0.5);
-        this.dashText = this.add.text(16, 198, '', { fontSize: '13px', fill: '#9dfff2', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.playerStateText = this.add.text(18, 116, '', { fontSize: '12px', fill: '#ffe7b3', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.rageText = this.add.text(18, 138, '', { fontSize: '14px', fill: '#ff5f72' }).setOrigin(0, 0.5);
+        this.tcText = this.add.text(18, 158, '', { fontSize: '14px', fill: '#38d9ff' }).setOrigin(0, 0.5);
+        this.outputText = this.add.text(18, 178, '', { fontSize: '13px', fill: '#f6b84b' }).setOrigin(0, 0.5);
+        this.dashText = this.add.text(18, 198, '', { fontSize: '13px', fill: '#7cff8a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
 
         this.healthBarBg = this.add.image(100, 30, 'health_bg').setOrigin(0, 0.5);
         this.healthBarFill = this.add.image(100, 30, 'health_fill').setOrigin(0, 0.5);
         this.healthBarFill.displayWidth = 200;
-        this.healthText = this.add.text(100, 30, '', { fontSize: '14px', fill: '#fff' }).setOrigin(0, 0.5);
+        this.healthText = this.add.text(100, 30, '', { fontSize: '14px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
 
         this.xpBarBg = this.add.image(100, 55, 'xp_bg').setOrigin(0, 0.5);
         this.xpBarFill = this.add.image(100, 55, 'xp_fill').setOrigin(0, 0.5);
         this.xpBarFill.displayWidth = 0;
-        this.xpText = this.add.text(100, 55, '', { fontSize: '12px', fill: '#fff' }).setOrigin(0, 0.5);
+        this.xpText = this.add.text(100, 55, '', { fontSize: '12px', fill: '#090b12', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
 
-        this.soulBarBg = this.add.rectangle(GAME_CENTER_X - 80, 24, 148, 12, 0x2a1a22).setOrigin(0, 0.5).setDepth(5);
-        this.soulBarBg.setStrokeStyle(1, 0x7a4f83);
-        this.soulBarFill = this.add.rectangle(GAME_CENTER_X - 79, 24, 0, 8, 0xd96bd8).setOrigin(0, 0.5).setDepth(5);
+        this.soulBarBg = this.add.rectangle(GAME_CENTER_X - 104, 24, 164, 12, BOBA_THEME.plum).setOrigin(0, 0.5).setDepth(5);
+        this.soulBarBg.setStrokeStyle(1, BOBA_THEME.taro);
+        this.soulBarFill = this.add.rectangle(GAME_CENTER_X - 103, 24, 0, 8, BOBA_THEME.taro).setOrigin(0, 0.5).setDepth(5);
         this.soulText = this.add.text(GAME_CENTER_X + 4, 24, '', { fontSize: '12px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5).setDepth(5);
-        this.waveText = this.add.text(GAME_WIDTH - 100, 20, 'WAVE 1', { fontSize: '18px', fill: '#fff4d6', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
-        this.scoreText = this.add.text(GAME_WIDTH - 100, 45, 'SCORE: 0', { fontSize: '14px', fill: '#d5e4ff' }).setOrigin(0.5, 0.5).setDepth(5);
-        this.levelText = this.add.text(GAME_WIDTH - 100, 70, 'LVL 1', { fontSize: '14px', fill: '#7ed2ff' }).setOrigin(0.5, 0.5).setDepth(5);
-        this.factoryStatusText = this.add.text(GAME_WIDTH - 100, 95, '', { fontSize: '13px', fill: '#ffb066', align: 'center' }).setOrigin(0.5, 0.5);
+        this.waveText = this.add.text(GAME_WIDTH - 100, 34, 'WAVE 1', { fontSize: '18px', fill: '#ffe7b3', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
+        this.scoreText = this.add.text(GAME_WIDTH - 100, 59, 'SCORE: 0', { fontSize: '14px', fill: '#d5e4ff' }).setOrigin(0.5, 0.5).setDepth(5);
+        this.levelText = this.add.text(GAME_WIDTH - 100, 84, 'LVL 1', { fontSize: '14px', fill: '#38d9ff', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
+        this.factoryStatusText = this.add.text(GAME_WIDTH - 100, 109, '', { fontSize: '13px', fill: '#f6b84b', align: 'center' }).setOrigin(0.5, 0.5);
         this.playerDownBanner = this.add.text(GAME_CENTER_X, GAME_HEIGHT - 40, 'PLAYER DOWN', {
             fontSize: '18px',
             fill: '#ffd27a',
@@ -3577,7 +3743,7 @@ class GameScene extends Phaser.Scene {
         this.dashText.setText(`DASH: ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
 
         const soulProgress = getCampaignSoulProgress();
-        this.soulBarFill.width = 146 * soulProgress.pct;
+        this.soulBarFill.width = 162 * soulProgress.pct;
         this.soulText.setText(
             soulProgress.souls >= soulProgress.target
                 ? `${getCampaignLocation().shortName} BOSS`
@@ -3607,19 +3773,6 @@ class UpgradeScene extends Phaser.Scene {
         GameState.upgradeSceneActive = true;
 
         this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x04060d, 0.94).setInteractive();
-        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 840, 560, 0x111827, 0x536784, 0.98);
-
-        this.add.text(GAME_CENTER_X, 104, 'CHOOSE AN UPGRADE', {
-            fontSize: '42px', fill: '#ffd700', fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-
-        this.add.text(GAME_CENTER_X, 148, `LEVEL ${GameState.level}`, {
-            fontSize: '22px', fill: '#d5e4ff', fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-
-        this.add.text(GAME_CENTER_X, 178, 'Pick the next tier for your build', {
-            fontSize: '18px', fill: '#7ee0ff'
-        }).setOrigin(0.5);
 
         this.chosenUpgrades = buildWeightedUpgradeChoices();
         if (this.chosenUpgrades.length === 0) {
@@ -3631,8 +3784,8 @@ class UpgradeScene extends Phaser.Scene {
 
         this.cards = [];
         this.chosenUpgrades.forEach((upgrade, i) => {
-            const x = GAME_CENTER_X - 220 + i * 220;
-            const card = this.createUpgradeCard(x, 390, upgrade, i);
+            const x = GAME_CENTER_X - 200 + i * 200;
+            const card = this.createUpgradeCard(x, 396, upgrade, i);
             this.cards.push(card);
         });
 
@@ -3679,62 +3832,80 @@ class UpgradeScene extends Phaser.Scene {
     }
 
     createUpgradeCard(x, y, upgrade, index) {
-        const branchColors = {
-            shot: 0x7ed2ff,
-            speed: 0x7dffa0,
-            damage: 0xff9f80,
-            health: 0xff7d9d,
-            pierce: 0xe6d47a,
-            bounce: 0xb08cff
-        };
-        const accent = branchColors[upgrade.branch] || 0x7ed2ff;
-        const card = this.add.rectangle(x, y, 190, 255, 0x1a2132, 0.98)
-            .setStrokeStyle(2, accent)
+        const theme = getUpgradeVisualTheme(upgrade);
+        const accent = theme.accent;
+        const asset = getUpgradeCardAssetForUpgrade(upgrade);
+        const source = asset && this.textures.exists(asset.key)
+            ? this.textures.get(asset.key).getSourceImage()
+            : null;
+        const cardHeight = 270;
+        const cardWidth = source ? Math.round(cardHeight * (source.width / source.height)) : 164;
+        const glow = this.add.rectangle(x, y, cardWidth + 14, cardHeight + 14, theme.glow, 0.34)
+            .setStrokeStyle(2, accent, 0.82);
+        const art = asset && this.textures.exists(asset.key)
+            ? this.add.image(x, y, asset.key).setDisplaySize(cardWidth, cardHeight)
+            : null;
+        const card = (art || this.add.rectangle(x, y, 190, 255, BOBA_THEME.glass, 0.98)
+            .setStrokeStyle(2, accent))
             .setInteractive({ useHandCursor: true });
 
-        const readableTag = (upgrade.branch || 'upgrade').replace(/^./, ch => ch.toUpperCase());
-        this.add.text(x, y - 106, `${readableTag} - Tier ${upgrade.tier}`.toUpperCase(), {
-            fontSize: '12px',
-            fill: upgrade.tier >= 5 ? '#ffd700' : '#7ee0ff',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
+        if (!art) {
+            const readableTag = (upgrade.branch || 'upgrade').replace(/^./, ch => ch.toUpperCase());
+            this.add.text(x, y - 106, `${readableTag} - Tier ${upgrade.tier}`.toUpperCase(), {
+                fontSize: '12px',
+                fill: upgrade.tier >= 5 ? '#ffd700' : '#7ee0ff',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5);
 
-        this.add.rectangle(x, y - 64, 78, 52, accent, 0.15).setStrokeStyle(2, accent);
-        const iconSize = upgrade.icon.length > 4 ? '18px' : upgrade.icon.length > 2 ? '23px' : '34px';
-        this.add.text(x, y - 64, upgrade.icon, {
-            fontSize: iconSize,
-            fill: '#fff7e6',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
+            this.add.rectangle(x, y - 64, 78, 52, accent, 0.15).setStrokeStyle(2, accent);
+            const iconSize = upgrade.icon.length > 4 ? '18px' : upgrade.icon.length > 2 ? '23px' : '34px';
+            this.add.text(x, y - 64, upgrade.icon, {
+                fontSize: iconSize,
+                fill: '#fff7e6',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5);
 
-        this.add.text(x, y + 2, upgrade.name, {
-            fontSize: '19px',
-            fill: '#fff7e6',
-            fontFamily: 'Arial Black',
-            align: 'center',
-            wordWrap: { width: 154 }
-        }).setOrigin(0.5);
+            this.add.text(x, y + 2, upgrade.name, {
+                fontSize: '19px',
+                fill: '#fff7e6',
+                fontFamily: 'Arial Black',
+                align: 'center',
+                wordWrap: { width: 154 }
+            }).setOrigin(0.5);
 
-        this.add.text(x, y + 64, upgrade.desc, {
-            fontSize: '13px',
-            fill: '#c7d4ec',
-            align: 'center',
-            wordWrap: { width: 154 }
-        }).setOrigin(0.5);
+            this.add.text(x, y + 64, upgrade.desc, {
+                fontSize: '13px',
+                fill: '#c7d4ec',
+                align: 'center',
+                wordWrap: { width: 154 }
+            }).setOrigin(0.5);
+        }
 
         this.add.text(x, y + 112, `[${index + 1}]`, {
             fontSize: '14px',
-            fill: '#7f8da7',
+            fill: '#fff7e6',
             fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(2);
 
         card.on('pointerover', () => {
-            card.setFillStyle(0x232c42, 0.98);
-            card.setStrokeStyle(3, 0xffd700);
+            glow.setFillStyle(theme.glow, 0.72);
+            glow.setStrokeStyle(3, BOBA_THEME.caramel, 1);
+            if (art) {
+                card.setDisplaySize(cardWidth + 8, cardHeight + 12);
+            } else {
+                card.setFillStyle(0x232c42, 0.98);
+                card.setStrokeStyle(3, BOBA_THEME.caramel);
+            }
         });
         card.on('pointerout', () => {
-            card.setFillStyle(0x1a2132, 0.98);
-            card.setStrokeStyle(2, accent);
+            glow.setFillStyle(theme.glow, 0.34);
+            glow.setStrokeStyle(2, accent, 0.82);
+            if (art) {
+                card.setDisplaySize(cardWidth, cardHeight);
+            } else {
+                card.setFillStyle(BOBA_THEME.glass, 0.98);
+                card.setStrokeStyle(2, accent);
+            }
         });
         card.on('pointerdown', () => {
             this.select(this.cards.indexOf(card));

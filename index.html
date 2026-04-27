@@ -53,58 +53,34 @@
 <body>
     <div id="game-root"></div>
     <div id="boot-status">LOADING BOBA ROGUELIKE...</div>
-    <script src="js/GameState.js"></script>
     <script>
         (function () {
             var bootStatus = document.getElementById('boot-status');
 
-            function setBootStatus(message) {
+            window.setBootStatus = function (message) {
                 if (bootStatus) {
                     bootStatus.textContent = message;
                 }
-            }
+            };
 
             window.addEventListener('error', function (event) {
                 var filename = event.filename ? String(event.filename).split('/').pop() : '';
                 var location = filename ? ' @ ' + filename + ':' + event.lineno : '';
-                setBootStatus('BOOT ERROR: ' + (event.message || 'CHECK CONSOLE') + location);
+                window.setBootStatus('BOOT ERROR: ' + (event.message || 'CHECK CONSOLE') + location);
             });
 
             window.addEventListener('unhandledrejection', function (event) {
                 var reason = event.reason || {};
                 var message = reason.message || reason.stack || String(reason);
-                setBootStatus('BOOT ERROR: ' + (message || 'PROMISE REJECTION'));
+                window.setBootStatus('BOOT ERROR: ' + (message || 'PROMISE REJECTION'));
             });
 
-            function withCacheBust(src) {
-                return window.location.protocol === 'file:' ? src : src + '?v=' + Date.now();
-            }
-
-            function loadScript(src, done, retrySrc) {
-                var script = document.createElement('script');
-                script.src = src;
-                script.onload = done;
-                script.onerror = function () {
-                    if (retrySrc) {
-                        script.remove();
-                        loadScript(retrySrc, done);
-                        return;
-                    }
-                    setBootStatus('FAILED TO LOAD ' + src);
-                    if (done) done();
-                };
-                document.body.appendChild(script);
-            }
-
-            function loadGame() {
-                setBootStatus('STARTING GAME...');
-                loadScript(withCacheBust('js/game.js'), null, 'js/game.js');
-            }
-
-            setBootStatus('LOADING EMBEDDED ASSETS...');
-            loadScript(withCacheBust('js/embedded-assets.js'), loadGame, 'js/embedded-assets.js');
+            window.setBootStatus('LOADING EMBEDDED ASSETS...');
         }());
     </script>
+    <script src="js/GameState.js" onerror="window.setBootStatus('FAILED TO LOAD js/GameState.js')"></script>
+    <script src="js/embedded-assets.js" onload="window.setBootStatus('STARTING GAME...')" onerror="window.setBootStatus('FAILED TO LOAD js/embedded-assets.js')"></script>
+    <script src="js/game.js" onerror="window.setBootStatus('FAILED TO LOAD js/game.js')"></script>
 
 </body>
 </html>
