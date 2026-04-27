@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Boba Roguelike</title>
-    <script src="vendor/phaser.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -53,7 +52,6 @@
 <body>
     <div id="game-root"></div>
     <div id="boot-status">LOADING BOBA ROGUELIKE...</div>
-    <script src="js/GameState.js"></script>
     <script>
         (function () {
             var bootStatus = document.getElementById('boot-status');
@@ -83,18 +81,15 @@
             }
 
             function withCacheBust(src) {
-                if (window.location.protocol === 'file:') return src;
+                if (window.location.protocol === 'file:' && !/^https?:\/\//i.test(src)) return src;
                 var separator = src.indexOf('?') === -1 ? '?' : '&';
                 return src + separator + 'v=' + Date.now();
             }
 
             function scriptSources(src) {
                 var sources = [withCacheBust(src), src];
-
-                if (window.location.protocol !== 'file:') {
-                    sources.push(withCacheBust(githubCdnBase + src));
-                    sources.push(githubCdnBase + src);
-                }
+                sources.push(withCacheBust(githubCdnBase + src));
+                sources.push(githubCdnBase + src);
 
                 return sources.filter(function (source, index) {
                     return sources.indexOf(source) === index;
@@ -128,13 +123,33 @@
                 tryNext();
             }
 
+            function loadScriptsInOrder(scripts, done) {
+                var index = 0;
+
+                function next() {
+                    var script = scripts[index++];
+                    if (!script) {
+                        if (done) done();
+                        return;
+                    }
+
+                    setBootStatus(script.status);
+                    loadScript(scriptSources(script.src), next);
+                }
+
+                next();
+            }
+
             function loadGame() {
                 setBootStatus('STARTING GAME...');
                 loadScript(scriptSources('js/game.js'));
             }
 
-            setBootStatus('LOADING EMBEDDED ASSETS...');
-            loadScript(scriptSources('js/embedded-assets.js'), loadGame);
+            loadScriptsInOrder([
+                { src: 'vendor/phaser.min.js', status: 'LOADING PHASER...' },
+                { src: 'js/GameState.js', status: 'LOADING GAME STATE...' },
+                { src: 'js/embedded-assets.js', status: 'LOADING EMBEDDED ASSETS...' }
+            ], loadGame);
         }());
     </script>
 
