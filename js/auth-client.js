@@ -3,7 +3,7 @@
     const USER_KEY = 'boba_auth_user';
     const API_KEY = 'boba_api_url';
     const SAVE_KEY = 'boba_roguelike_save';
-    const DEFAULT_API_URL = 'https://boba-roguelike-api.onrender.com';
+    const DEFAULT_API_URL = 'https://boba-roguelike.onrender.com';
 
     let apiUrl = cleanApiUrl(localStorage.getItem(API_KEY) || window.BOBA_API_URL || DEFAULT_API_URL);
     let token = localStorage.getItem(TOKEN_KEY) || '';
