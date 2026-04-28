@@ -127,6 +127,7 @@ const SaveManager = {
         };
         try {
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+            window.BobaAuth?.queueSaveUpload?.();
         } catch (e) { /* storage full or unavailable */ }
     },
 

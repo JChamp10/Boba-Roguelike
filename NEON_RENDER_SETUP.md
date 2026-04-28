@@ -77,11 +77,22 @@ Run `backend/schema.sql`. The main tables are `users` and `game_saves`.
 
 ## 5. Hooking The Game To The Backend
 
-The game can keep using localStorage today. When you add the login UI, call:
+The website now opens a login/signup gate before Phaser starts. The browser auth client lives in `js/auth-client.js`.
 
-1. `POST /auth/register` or `POST /auth/login`
-2. Save the returned token in localStorage.
-3. `PUT /save` with `localStorage.getItem('boba_roguelike_save')`.
-4. On login, call `GET /save` and write the returned save JSON back into localStorage.
+Login flow:
+
+1. `POST /auth/register` or `POST /auth/login`.
+2. Save the returned JWT in localStorage.
+3. Call `GET /save` before loading the game.
+4. Let the normal game save system write localStorage.
+5. `SaveManager.save()` calls `window.BobaAuth.queueSaveUpload()` to sync to Neon.
 
 Keep all database access inside the Render backend. GitHub Pages should only call your public API URL.
+
+If your Render service URL is different from the default, set this before `js/auth-client.js` loads:
+
+```html
+<script>
+  window.BOBA_API_URL = 'https://your-render-service.onrender.com';
+</script>
+```
