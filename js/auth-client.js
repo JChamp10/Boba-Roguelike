@@ -45,18 +45,19 @@
     }
 
     async function request(path, options = {}) {
+        const { noAuth, ...fetchOptions } = options;
         const headers = {
             'Content-Type': 'application/json',
-            ...(options.headers || {})
+            ...(fetchOptions.headers || {})
         };
-        if (token) {
+        if (token && !noAuth) {
             headers.Authorization = `Bearer ${token}`;
         }
 
         let response;
         try {
             response = await fetch(`${apiUrl}${path}`, {
-                ...options,
+                ...fetchOptions,
                 headers
             });
         } catch (error) {
@@ -80,6 +81,20 @@
             body: JSON.stringify({ save })
         });
         lastUploadedSave = raw;
+    }
+
+    async function fetchLeaderboard() {
+        const data = await request('/leaderboard', { noAuth: true });
+        return data.leaders || [];
+    }
+
+    async function submitRunStats(stats) {
+        if (!token) return null;
+        const data = await request('/leaderboard/submit', {
+            method: 'POST',
+            body: JSON.stringify(stats || {})
+        });
+        return data.stats || null;
     }
 
     function queueSaveUpload() {
@@ -210,6 +225,8 @@
         request,
         queueSaveUpload,
         uploadLocalSave,
+        fetchLeaderboard,
+        submitRunStats,
         getToken: () => token,
         getUser: () => user,
         getApiUrl: () => apiUrl,

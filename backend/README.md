@@ -21,3 +21,5 @@ Set `DATABASE_URL` to your Neon connection string and run `schema.sql` before st
 - `GET /auth/me`
 - `GET /save`
 - `PUT /save`
+- `GET /leaderboard`
+- `POST /leaderboard/submit`

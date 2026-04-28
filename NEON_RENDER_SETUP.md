@@ -59,6 +59,8 @@ POST /auth/login
 GET  /auth/me
 GET  /save
 PUT  /save
+GET  /leaderboard
+POST /leaderboard/submit
 ```
 
 Auth requests use JSON:
@@ -79,9 +81,10 @@ Authorization: Bearer YOUR_TOKEN
 
 ## 4. Database Tables
 
-Run `backend/schema.sql`. The main tables are `users` and `game_saves`.
+Run `backend/schema.sql`. The main tables are `users`, `game_saves`, and `player_stats`.
 
 `users` stores login identity. `game_saves` stores one JSON save blob per user, matching the current localStorage save format.
+`player_stats` powers the leaderboard with high score, total kills, best level, and runs played.
 
 ## 5. Hooking The Game To The Backend
 

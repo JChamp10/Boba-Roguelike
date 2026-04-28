@@ -162,6 +162,45 @@ app.put('/save', requireAuth, async (req, res, next) => {
     }
 });
 
+app.get('/leaderboard', async (req, res, next) => {
+    try {
+        const result = await db.query(
+            `select u.username, s.high_score, s.total_kills, s.best_level, s.runs_played
+             from player_stats s
+             join users u on u.id = s.user_id
+             order by s.high_score desc, s.total_kills desc, s.updated_at asc
+             limit 10`
+        );
+        res.json({ leaders: result.rows });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.post('/leaderboard/submit', requireAuth, async (req, res, next) => {
+    try {
+        const score = Math.max(0, Math.floor(Number(req.body.score) || 0));
+        const kills = Math.max(0, Math.floor(Number(req.body.totalKills) || 0));
+        const level = Math.max(1, Math.floor(Number(req.body.level) || 1));
+
+        const result = await db.query(
+            `insert into player_stats (user_id, high_score, total_kills, best_level, runs_played)
+             values ($1, $2, $3, $4, 1)
+             on conflict (user_id)
+             do update set
+                high_score = greatest(player_stats.high_score, excluded.high_score),
+                total_kills = greatest(player_stats.total_kills, excluded.total_kills),
+                best_level = greatest(player_stats.best_level, excluded.best_level),
+                runs_played = player_stats.runs_played + 1
+             returning high_score, total_kills, best_level, runs_played`,
+            [req.user.sub, score, kills, level]
+        );
+        res.json({ stats: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+});
+
 app.use((error, req, res, next) => {
     console.error(error);
     res.status(500).json({ error: 'Server error' });
