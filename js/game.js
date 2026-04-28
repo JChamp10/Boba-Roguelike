@@ -27,7 +27,7 @@ const DRINK_OPTIONS = [
         name: 'Lychee',
         desc: 'Light and sharp fruit build',
         playerTexture: 'lychee_player',
-        playerScale: 0.055,
+        playerScale: 0.11,
         accent: 0xff5fa2
     }
 ];
@@ -54,7 +54,7 @@ const GUN_OPTIONS = [
         desc: 'Four lighter pellets in a cone',
         gunTexture: 'lychee_shotgun',
         projectileTexture: 'lychee_projectile',
-        gunScale: 0.055,
+        gunScale: 0.0825,
         projectileScale: 0.035,
         projectileSpeed: 540,
         projectileCount: 4,
