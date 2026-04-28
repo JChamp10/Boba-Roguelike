@@ -5,7 +5,7 @@
     const SAVE_KEY = 'boba_roguelike_save';
     const DEFAULT_API_URL = 'https://boba-roguelike-api.onrender.com';
 
-    let apiUrl = localStorage.getItem(API_KEY) || window.BOBA_API_URL || DEFAULT_API_URL;
+    let apiUrl = cleanApiUrl(localStorage.getItem(API_KEY) || window.BOBA_API_URL || DEFAULT_API_URL);
     let token = localStorage.getItem(TOKEN_KEY) || '';
     let user = readJson(localStorage.getItem(USER_KEY));
     let saveUploadTimer = null;
@@ -16,6 +16,19 @@
             return value ? JSON.parse(value) : null;
         } catch (error) {
             return null;
+        }
+    }
+
+    function cleanApiUrl(value) {
+        return String(value || '').trim().replace(/\/+$/, '');
+    }
+
+    function setApiUrl(value) {
+        apiUrl = cleanApiUrl(value) || DEFAULT_API_URL;
+        localStorage.setItem(API_KEY, apiUrl);
+        const input = document.getElementById('auth-api-url');
+        if (input) {
+            input.value = apiUrl;
         }
     }
 
@@ -40,10 +53,15 @@
             headers.Authorization = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${apiUrl}${path}`, {
-            ...options,
-            headers
-        });
+        let response;
+        try {
+            response = await fetch(`${apiUrl}${path}`, {
+                ...options,
+                headers
+            });
+        } catch (error) {
+            throw new Error(`Cannot reach backend at ${apiUrl}. Check your Render URL and deploy logs.`);
+        }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(data.error || `Request failed: ${response.status}`);
@@ -134,14 +152,19 @@
 
     async function init({ onReady, setStatus } = {}) {
         setStatus?.('WAITING FOR LOGIN...');
-        localStorage.setItem(API_KEY, apiUrl);
+        setApiUrl(apiUrl);
 
         const form = document.getElementById('auth-form');
         const loginTab = document.getElementById('auth-login-tab');
         const signupTab = document.getElementById('auth-signup-tab');
+        const apiInput = document.getElementById('auth-api-url');
 
         loginTab?.addEventListener('click', () => setMode('login'));
         signupTab?.addEventListener('click', () => setMode('signup'));
+        apiInput?.addEventListener('change', () => {
+            setApiUrl(apiInput.value);
+            setMessage(`Using API: ${apiUrl}`, true);
+        });
         setMode('login');
 
         if (await verifyToken()) {
@@ -158,6 +181,7 @@
             const login = document.getElementById('auth-login')?.value || '';
             const password = document.getElementById('auth-password')?.value || '';
             const username = document.getElementById('auth-username')?.value || '';
+            setApiUrl(document.getElementById('auth-api-url')?.value || apiUrl);
 
             setMessage(mode === 'signup' ? 'Creating account...' : 'Logging in...', true);
 
@@ -188,6 +212,7 @@
         uploadLocalSave,
         getToken: () => token,
         getUser: () => user,
-        getApiUrl: () => apiUrl
+        getApiUrl: () => apiUrl,
+        setApiUrl
     };
 }());

@@ -42,6 +42,14 @@ CORS_ORIGIN=https://jchamp10.github.io
 
 Render provides `PORT`; the backend reads it automatically.
 
+After deploy, copy your service URL, for example:
+
+```txt
+https://your-service-name.onrender.com
+```
+
+Paste that URL into the login screen's `RENDER API URL` field. The old placeholder `https://boba-roguelike-api.onrender.com` only works if your Render service is actually named `boba-roguelike-api`.
+
 ## 3. API Endpoints
 
 ```txt

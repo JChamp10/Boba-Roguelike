@@ -124,6 +124,14 @@
             border-color: #7ed2ff;
             box-shadow: 0 0 0 3px rgba(126, 210, 255, 0.14);
         }
+        .auth-api-row {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(126, 210, 255, 0.18);
+        }
+        .auth-api-row label {
+            color: #9fd7ff;
+        }
         .auth-actions {
             display: grid;
             gap: 10px;
@@ -165,6 +173,10 @@
             <input id="auth-login" name="login" autocomplete="email" required>
             <label for="auth-password">PASSWORD</label>
             <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="8" required>
+            <div class="auth-api-row">
+                <label for="auth-api-url">RENDER API URL</label>
+                <input id="auth-api-url" name="apiUrl" autocomplete="off" spellcheck="false">
+            </div>
             <div class="auth-actions">
                 <button class="auth-primary" id="auth-submit" type="submit">LOGIN</button>
             </div>
