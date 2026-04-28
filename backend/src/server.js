@@ -1,0 +1,172 @@
+require('dotenv').config();
+
+const bcrypt = require('bcryptjs');
+const cors = require('cors');
+const express = require('express');
+const db = require('./db');
+const { requireAuth, signToken } = require('./auth');
+
+const app = express();
+const port = process.env.PORT || 10000;
+
+// BACKEND TUNING: add your GitHub Pages/custom domains to CORS_ORIGIN, comma-separated.
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
+app.use(cors({
+    origin(origin, callback) {
+        if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+    }
+}));
+app.use(express.json({ limit: '1mb' }));
+
+function normalizeEmail(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
+function normalizeUsername(username) {
+    return String(username || '').trim();
+}
+
+function publicUser(row) {
+    return {
+        id: row.id,
+        username: row.username,
+        email: row.email,
+        createdAt: row.created_at
+    };
+}
+
+app.get('/health', async (req, res, next) => {
+    try {
+        await db.query('select 1');
+        res.json({ ok: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.post('/auth/register', async (req, res, next) => {
+    try {
+        const username = normalizeUsername(req.body.username);
+        const email = normalizeEmail(req.body.email);
+        const password = String(req.body.password || '');
+
+        if (username.length < 3 || username.length > 24) {
+            return res.status(400).json({ error: 'Username must be 3-24 characters' });
+        }
+        if (!email.includes('@')) {
+            return res.status(400).json({ error: 'Valid email is required' });
+        }
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 12);
+        const result = await db.query(
+            `insert into users (username, email, password_hash)
+             values ($1, $2, $3)
+             returning id, username, email, created_at`,
+            [username, email, passwordHash]
+        );
+        const user = publicUser(result.rows[0]);
+        res.status(201).json({ user, token: signToken(user) });
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(409).json({ error: 'Username or email already exists' });
+        }
+        next(error);
+    }
+});
+
+app.post('/auth/login', async (req, res, next) => {
+    try {
+        const login = String(req.body.login || req.body.email || '').trim().toLowerCase();
+        const password = String(req.body.password || '');
+
+        const result = await db.query(
+            `select id, username, email, password_hash, created_at
+             from users
+             where lower(email) = $1 or lower(username) = $1
+             limit 1`,
+            [login]
+        );
+        const row = result.rows[0];
+        if (!row || !(await bcrypt.compare(password, row.password_hash))) {
+            return res.status(401).json({ error: 'Invalid login' });
+        }
+
+        const user = publicUser(row);
+        res.json({ user, token: signToken(user) });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.get('/auth/me', requireAuth, async (req, res, next) => {
+    try {
+        const result = await db.query(
+            'select id, username, email, created_at from users where id = $1',
+            [req.user.sub]
+        );
+        if (!result.rows[0]) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ user: publicUser(result.rows[0]) });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.get('/save', requireAuth, async (req, res, next) => {
+    try {
+        const result = await db.query(
+            'select save_data, updated_at from game_saves where user_id = $1',
+            [req.user.sub]
+        );
+        res.json({
+            save: result.rows[0]?.save_data || null,
+            updatedAt: result.rows[0]?.updated_at || null
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.put('/save', requireAuth, async (req, res, next) => {
+    try {
+        const saveData = req.body.save;
+        if (!saveData || typeof saveData !== 'object' || Array.isArray(saveData)) {
+            return res.status(400).json({ error: 'save must be a JSON object' });
+        }
+
+        const result = await db.query(
+            `insert into game_saves (user_id, save_data)
+             values ($1, $2)
+             on conflict (user_id)
+             do update set save_data = excluded.save_data
+             returning save_data, updated_at`,
+            [req.user.sub, saveData]
+        );
+        res.json({
+            save: result.rows[0].save_data,
+            updatedAt: result.rows[0].updated_at
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.use((error, req, res, next) => {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+});
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Boba Roguelike API listening on ${port}`);
+});
