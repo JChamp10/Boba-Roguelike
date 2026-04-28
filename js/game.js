@@ -4,79 +4,100 @@ const GAME_WIDTH = 1200;
 const GAME_HEIGHT = 800;
 const GAME_CENTER_X = GAME_WIDTH / 2;
 const GAME_CENTER_Y = GAME_HEIGHT / 2;
-const CAMPAIGN_BASE_SOUL_TARGET = 1000;
-const CAMPAIGN_SOUL_SCALE = 5;
+// GAMEPLAY TUNING: change these first when balancing pickups, passive income, and store boosts.
+const HEALING_ORB_HEAL_AMOUNT = 5;
+const XP_ORB_MAGNET_RANGE = 210;
+const XP_ORB_MIN_SPEED = 340;
+const XP_ORB_MAX_SPEED = 820;
+const XP_ORB_PLAYER_SPEED_BONUS = 120;
+const IDLE_RUN_TAPIOCA_TICK_MS = 1000;
+const PER_RUN_DAMAGE_BOOST_PERCENT = 0.10;
 
-const CAMPAIGN_LOCATIONS = [
-    { id: 'america', name: 'America', shortName: 'USA', x: 116, y: 374, accent: 0x6fb7ff, boss: 'Cupzilla Prime' },
-    { id: 'brazil', name: 'Brazil', shortName: 'BRA', x: 284, y: 520, accent: 0x64d970, boss: 'Carnival Shaker' },
-    { id: 'egypt', name: 'Egypt', shortName: 'EGY', x: 520, y: 382, accent: 0xf3c35c, boss: 'Pharaoh Tapioca' },
-    { id: 'india', name: 'India', shortName: 'IND', x: 704, y: 426, accent: 0xff9f66, boss: 'Masala Monarch' },
-    { id: 'taiwan', name: 'Taiwan', shortName: 'TWN', x: 884, y: 356, accent: 0xd98bff, boss: 'Pearl Empress' }
+const DRINK_OPTIONS = [
+    {
+        id: 'classic',
+        name: 'Classic Boba',
+        desc: 'Balanced milk tea body',
+        playerTexture: 'player_boba',
+        playerScale: 0.14,
+        accent: 0xf6b84b
+    },
+    {
+        id: 'lychee',
+        name: 'Lychee',
+        desc: 'Light and sharp fruit build',
+        playerTexture: 'lychee_player',
+        playerScale: 0.055,
+        accent: 0xff5fa2
+    }
 ];
 
-function getCampaignLocation(index = GameState.campaignLocationIndex) {
-    return CAMPAIGN_LOCATIONS[Phaser.Math.Clamp(index || 0, 0, CAMPAIGN_LOCATIONS.length - 1)];
-}
-
-function getCampaignSoulTarget() {
-    return Math.floor(CAMPAIGN_BASE_SOUL_TARGET * Math.pow(CAMPAIGN_SOUL_SCALE, GameState.campaignLocationIndex || 0));
-}
-
-function getCampaignWeaponProfile() {
-    const location = getCampaignLocation();
-    if (location.id === 'brazil') {
-        return {
-            id: 'lychee-shotgun',
-            playerTexture: 'lychee_player',
-            gunTexture: 'lychee_shotgun',
-            projectileTexture: 'lychee_projectile',
-            projectileDamage: 3,
-            projectileCount: 4,
-            spread: 0.62,
-            playerScale: 0.055,
-            gunScale: 0.055,
-            projectileScale: 0.035,
-            projectileSpeed: 540,
-            fireRate: 520
-        };
-    }
-    return {
-        id: 'classic-boba',
-        playerTexture: 'player_boba',
+const GUN_OPTIONS = [
+    {
+        id: 'classic',
+        name: 'Boba Blaster',
+        desc: 'Single accurate pearl',
         gunTexture: 'boba_gun',
-        projectileTexture: 'projectile_boba'
-    };
+        projectileTexture: 'projectile_boba',
+        gunScale: 0.055,
+        projectileScale: 0.18,
+        projectileSpeed: 500,
+        projectileCount: 1,
+        spread: 0.4,
+        damageMultiplier: 1,
+        fireRateMultiplier: 1,
+        accent: 0x7ed2ff
+    },
+    {
+        id: 'lychee-shotgun',
+        name: 'Lychee Shotgun',
+        desc: 'Four lighter pellets in a cone',
+        gunTexture: 'lychee_shotgun',
+        projectileTexture: 'lychee_projectile',
+        gunScale: 0.055,
+        projectileScale: 0.035,
+        projectileSpeed: 540,
+        projectileCount: 4,
+        spread: 0.62,
+        damageMultiplier: 0.3,
+        fireRateMultiplier: 1.7,
+        accent: 0xff5fa2
+    }
+];
+
+function getDrinkOption(id = GameState.selectedDrink) {
+    return DRINK_OPTIONS.find(option => option.id === id) || DRINK_OPTIONS[0];
 }
 
-function getCampaignSoulProgress() {
-    const target = getCampaignSoulTarget();
+function getGunOption(id = GameState.selectedGun) {
+    return GUN_OPTIONS.find(option => option.id === id) || GUN_OPTIONS[0];
+}
+
+function sanitizeBuildState() {
+    GameState.selectedDrink = getDrinkOption(GameState.selectedDrink).id;
+    GameState.selectedGun = getGunOption(GameState.selectedGun).id;
+}
+
+function getSelectedBuildProfile() {
+    sanitizeBuildState();
+    const drink = getDrinkOption();
+    const gun = getGunOption();
     return {
-        souls: GameState.runSouls || 0,
-        target,
-        pct: target > 0 ? Math.min(1, (GameState.runSouls || 0) / target) : 1
+        id: `${drink.id}-${gun.id}`,
+        drink,
+        gun,
+        playerTexture: drink.playerTexture,
+        gunTexture: gun.gunTexture,
+        projectileTexture: gun.projectileTexture,
+        playerScale: drink.playerScale,
+        gunScale: gun.gunScale,
+        projectileScale: gun.projectileScale,
+        projectileSpeed: gun.projectileSpeed,
+        projectileCount: gun.projectileCount,
+        spread: gun.spread,
+        damageMultiplier: gun.damageMultiplier,
+        fireRateMultiplier: gun.fireRateMultiplier
     };
-}
-
-function sanitizeCampaignState() {
-    GameState.campaignLocationIndex = Phaser.Math.Clamp(GameState.campaignLocationIndex || 0, 0, CAMPAIGN_LOCATIONS.length - 1);
-    GameState.campaignUnlockedIndex = Phaser.Math.Clamp(
-        Math.max(GameState.campaignUnlockedIndex || 0, GameState.campaignLocationIndex),
-        0,
-        CAMPAIGN_LOCATIONS.length - 1
-    );
-    GameState.campaignCleared = GameState.campaignCleared || {};
-}
-
-function advanceCampaignLocation() {
-    sanitizeCampaignState();
-    const current = getCampaignLocation();
-    GameState.campaignCleared[current.id] = true;
-    const nextIndex = Math.min(GameState.campaignLocationIndex + 1, CAMPAIGN_LOCATIONS.length - 1);
-    GameState.campaignUnlockedIndex = Math.max(GameState.campaignUnlockedIndex, nextIndex);
-    GameState.campaignLocationIndex = nextIndex;
-    resetRunOnlyProgress();
-    SaveManager.save();
 }
 
 // ============================================
@@ -95,9 +116,8 @@ const SaveManager = {
             totalRage: GameState.totalRage,
             totalEnemiesKilled: GameState.totalEnemiesKilled,
             aimMode: GameState.aimMode,
-            campaignLocationIndex: GameState.campaignLocationIndex,
-            campaignUnlockedIndex: GameState.campaignUnlockedIndex,
-            campaignCleared: GameState.campaignCleared,
+            selectedDrink: GameState.selectedDrink,
+            selectedGun: GameState.selectedGun,
             idleMachines: GameState.idleMachines,
             idleFactoryTech: GameState.idleFactoryTech,
             evolutionBoost: GameState.evolutionBoost,
@@ -122,16 +142,14 @@ const SaveManager = {
             GameState.totalRage = data.totalRage || 0;
             GameState.totalEnemiesKilled = data.totalEnemiesKilled || 0;
             GameState.aimMode = data.aimMode === 'manual' ? 'manual' : 'auto';
-            GameState.campaignLocationIndex = data.campaignLocationIndex || 0;
-            GameState.campaignUnlockedIndex = data.campaignUnlockedIndex || GameState.campaignLocationIndex || 0;
-            GameState.campaignCleared = data.campaignCleared || {};
-            sanitizeCampaignState();
+            GameState.selectedDrink = data.selectedDrink || GameState.selectedDrink || 'classic';
+            GameState.selectedGun = data.selectedGun || GameState.selectedGun || 'classic';
+            sanitizeBuildState();
             GameState.idleMachines = data.idleMachines || {};
             GameState.idleFactoryTech = data.idleFactoryTech || {};
             GameState.evolutionBoost = data.evolutionBoost || 0;
             GameState.factoryUpgrades = this.sanitizeFactoryUpgrades(data.factoryUpgrades);
             GameState.runBoosts = this.sanitizeRunBoosts(data.runBoosts);
-            GameState.machines = {};
             this.applyOfflineIdleProgress(data.savedAt);
             return true;
         } catch (e) {
@@ -140,23 +158,21 @@ const SaveManager = {
     },
 
     migrate(data) {
-        // Version 8 preserves progression and adds campaign map progress.
+        // Version 8 preserves progression and adds character build picks.
         GameState.tapioca = data.tapioca || 0;
         GameState.totalTapioca = data.totalTapioca || 0;
         GameState.rage = data.rage || 0;
         GameState.totalRage = data.totalRage || 0;
         GameState.totalEnemiesKilled = data.totalEnemiesKilled || 0;
         GameState.aimMode = data.aimMode === 'manual' ? 'manual' : 'auto';
-        GameState.campaignLocationIndex = data.campaignLocationIndex || 0;
-        GameState.campaignUnlockedIndex = data.campaignUnlockedIndex || GameState.campaignLocationIndex || 0;
-        GameState.campaignCleared = data.campaignCleared || {};
-        sanitizeCampaignState();
+        GameState.selectedDrink = data.selectedDrink || GameState.selectedDrink || 'classic';
+        GameState.selectedGun = data.selectedGun || GameState.selectedGun || 'classic';
+        sanitizeBuildState();
         GameState.idleMachines = data.idleMachines || {};
         GameState.idleFactoryTech = data.idleFactoryTech || {};
         GameState.evolutionBoost = data.evolutionBoost || 0;
         GameState.factoryUpgrades = this.sanitizeFactoryUpgrades(data.factoryUpgrades);
         GameState.runBoosts = this.sanitizeRunBoosts(data.runBoosts);
-        GameState.machines = {};
         GameState.reset();
         this.applyOfflineIdleProgress(data.savedAt);
         this.save();
@@ -171,9 +187,8 @@ const SaveManager = {
         GameState.totalRage = 0;
         GameState.totalEnemiesKilled = 0;
         GameState.aimMode = 'auto';
-        GameState.campaignLocationIndex = 0;
-        GameState.campaignUnlockedIndex = 0;
-        GameState.campaignCleared = {};
+        GameState.selectedDrink = 'classic';
+        GameState.selectedGun = 'classic';
         GameState.idleMachines = {};
         GameState.idleFactoryTech = {};
         GameState.evolutionBoost = 0;
@@ -223,18 +238,7 @@ const CHARACTERS = [
     { name: 'Brown Sugar', color: 0xD35400, speed: 190, damage: 12, fireRate: 350, desc: 'Fastest movement' }
 ];
 
-// ============================================
-// MACHINE DEFINITIONS (Idle / Factory side)
-// ============================================
-const MACHINES = [
-    { id: 'basicBall',   name: 'Ball Roller',     desc: 'Slow but steady',        icon: '🔵', baseCost: 10,   costScale: 1.15, tps: 1,   rageDrop: 0.01 },
-    { id: 'advancedBall',name: 'Ball Maker',      desc: 'Faster production',      icon: '🟢', baseCost: 75,   costScale: 1.18, tps: 5,   rageDrop: 0.03 },
-    { id: 'speedBall',   name: 'Speed Line',      desc: 'High throughput',        icon: '🟡', baseCost: 300,  costScale: 1.20, tps: 15,  rageDrop: 0.05 },
-    { id: 'megaBall',    name: 'Mega Press',       desc: 'Industrial scale',       icon: '🟠', baseCost: 1000, costScale: 1.22, tps: 50,  rageDrop: 0.08 },
-    { id: 'autoBall',    name: 'Auto Factory',     desc: 'Fully automated',        icon: '⚙️',  baseCost: 4000, costScale: 1.25, tps: 200, rageDrop: 0.12 },
-    { id: 'quantumBall', name: 'Quantum Gen',      desc: 'Exotic production',      icon: '🟣', baseCost: 15000, costScale: 1.30, tps: 800, rageDrop: 0.20 }
-];
-
+// IDLE FACTORY TUNING: these machines create tapioca offline, in menus, and now during runs.
 const IDLE_MACHINE_TABLE = [
     { id: 'ballRoller', name: 'Ball Roller', desc: 'Steady hand-rolled tapioca', icon: 'BR', baseCost: 10, costScale: 1.20, tps: 0.1, evolutionPts: 1, mutationText: '+1% run speed each' },
     { id: 'ballMaker', name: 'Ball Maker', desc: 'Reliable machine-made pearls', icon: 'BM', baseCost: 50, costScale: 1.15, tps: 1, evolutionPts: 2, mutationText: '+0.5% run damage each' },
@@ -258,7 +262,7 @@ const PERMA_UPGRADES = [
     { id: 'menuHealth', branch: 'Small Boosts', name: 'Health', desc: '+1 max HP per level', icon: 'HP', baseCost: 5000, costScale: 1.30, maxLevel: 999, effectText: '+1 max HP', apply: () => { GameState.maxHealth += 1; } },
     { id: 'menuAmmo', branch: 'Small Boosts', name: 'Ammo Capacity', desc: '+1 max boba ammo per level', icon: 'AMMO', baseCost: 100000, costScale: 1.25, maxLevel: 999, effectText: '+1 max ammo', apply: scene => { scene.permaMaxAmmoBonus += 1; } },
     { id: 'menuRageBonus', branch: 'Per-Run Boosts', name: 'Rage Bonus', desc: '+2% rage gained per level', icon: 'RAGE', baseCost: 10000, costScale: 1.10, maxLevel: 999, effectText: '+2% rage', apply: scene => { scene.permaRageBonusPercent += 0.02; } },
-    { id: 'menuRunDamage', branch: 'Per-Run Boosts', name: 'Damage Bonus', desc: '+20% run damage per level', icon: 'DMG+', baseCost: 10000, costScale: 1.25, maxLevel: 999, effectText: '+20% damage', apply: scene => { scene.playerDamage += scene.basePlayerDamage * 0.2; } },
+    { id: 'menuRunDamage', branch: 'Per-Run Boosts', name: 'Damage Bonus', desc: '+10% run damage per level', icon: 'DMG+', baseCost: 10000, costScale: 1.25, maxLevel: 999, effectText: '+10% damage', apply: scene => { scene.playerDamage += scene.basePlayerDamage * PER_RUN_DAMAGE_BOOST_PERCENT; } },
     { id: 'menuXpBonus', branch: 'Per-Run Boosts', name: 'XP Bonus', desc: '+5% XP gained per level', icon: 'XP', baseCost: 20000, costScale: 1.10, maxLevel: 999, effectText: '+5% XP', apply: scene => { scene.permaXpBonusPercent += 0.05; } }
 ];
 
@@ -271,25 +275,6 @@ const TEMPORARY_PER_RUN_UPGRADE_IDS = new Set(
 function isTemporaryPerRunUpgrade(id) {
     return TEMPORARY_PER_RUN_UPGRADE_IDS.has(id);
 }
-
-// FACTORY UPGRADE DEFINITIONS (legacy draft data)
-// ============================================
-const FACTORY_STAT_UPGRADES = [
-    { id: 'rageDamage',   name: 'Bitter Rage',    desc: '+10% damage per level',        icon: '😤', baseCost: 50,  costScale: 1.5, maxLevel: 10, apply: (scene, level) => { scene.playerDamage *= 1 + (level * 0.10); } },
-    { id: 'rageSpeed',    name: 'Swift Fury',     desc: '+8% move speed per level',     icon: '💨', baseCost: 40,  costScale: 1.5, maxLevel: 10, apply: (scene, level) => { scene.playerSpeed *= 1 + (level * 0.08); } },
-    { id: 'rageFireRate', name: 'Furious Stir',    desc: '-5% fire cooldown per level',  icon: '🔥', baseCost: 60,  costScale: 1.6, maxLevel: 8,  apply: (scene, level) => { scene.playerFireRate *= 1 - (level * 0.05); } },
-    { id: 'rageHealth',   name: 'Overflowing Cup', desc: '+20 max health per level',     icon: '🩸', baseCost: 45,  costScale: 1.4, maxLevel: 10, apply: (scene, level) => { GameState.maxHealth += (level * 20); } },
-    { id: 'rageMulti',    name: 'Double Shot+',    desc: '+1 pearl every 2 levels',      icon: '🎯', baseCost: 100, costScale: 2.0, maxLevel: 5,  apply: (scene, level) => { scene.multiShot += Math.floor(level / 2); } },
-    { id: 'rageArmor',    name: 'Straw Shield',    desc: '-1 damage taken per level',    icon: '🛡️', baseCost: 75,  costScale: 1.5, maxLevel: 5,  apply: (scene, level) => { scene.damageReduction = (scene.damageReduction || 0) + level; } }
-];
-
-const FACTORY_SPECIAL_UPGRADES = [
-    { id: 'freeze',     name: 'Ice Pearl',    desc: '20% chance to freeze enemies 1.5s',          icon: '❄️',  cost: 150,  apply: (scene) => { scene.hasFreeze = true; scene.freezeChance = 0.2; } },
-    { id: 'explode',    name: 'Boba Detonate',desc: 'Killed enemies explode: 30 AoE damage',      icon: '💥', cost: 250,  apply: (scene) => { scene.hasExplode = true; } },
-    { id: 'vampire',    name: 'Vampire Boba', desc: 'Heal 5 HP per kill',                        icon: '🩸', cost: 125,  apply: (scene) => { scene.vampireHeal = 5; } },
-    { id: 'shield',     name: 'Milk Shield',  desc: 'Block 1 hit every 15 seconds',              icon: '🛡️', cost: 175,  apply: (scene) => { scene.hasShield = true; scene.shieldCooldown = 15000; } },
-    { id: 'crit',       name: 'Tapioca Crit', desc: '+15% crit chance for 2x damage',            icon: '⭐', cost: 100,  apply: (scene) => { scene.critChance = 0.15; } }
-];
 
 // ============================================
 // UPGRADE DEFINITIONS (in-run upgrades — existing)
@@ -327,13 +312,6 @@ const UPGRADES = [
     { id: 'bounce5', branch: 'bounce', tier: 5, name: 'Boba God', desc: 'Wall split can happen twice; first split keeps full damage', icon: 'B3', requires: ['bounce4'], apply: scene => { scene.wallSplitCount = 2; scene.wallFullDamageSplits = 1; } }
 ];
 
-const CHARACTER_PATHS = {
-    0: { id: 'classic', label: 'Classic Blend' },
-    1: { id: 'taro', label: 'Taro Tempo' },
-    2: { id: 'matcha', label: 'Matcha Power' },
-    3: { id: 'brownSugar', label: 'Brown Sugar Rush' }
-};
-
 const BOBA_THEME = {
     ink: 0x090b12,
     plum: 0x17111f,
@@ -364,35 +342,6 @@ const BRANCH_VISUALS = {
     evolution: { accent: BOBA_THEME.taro, glow: 0x2e1749, label: 'NEON EVOLUTION' }
 };
 
-const UPGRADE_CARD_ASSETS = [
-    'machine-ballRoller', 'machine-ballMaker', 'machine-megaPress', 'machine-quantumGen',
-    'tech-factoryUpgrade', 'tech-speedLine', 'tech-moreLabors', 'tech-hugePress', 'tech-tapiocaAtomizer',
-    'evolution-factory',
-    'damage1', 'damage2', 'damage3', 'damage4', 'damage5',
-    'speed1', 'speed2', 'speed3', 'speed4', 'speed5',
-    'health1', 'health2', 'health3', 'health4', 'health5',
-    'pierce1', 'pierce2', 'pierce3', 'pierce4', 'pierce5',
-    'bounce1', 'bounce2', 'bounce3', 'bounce4', 'bounce5',
-    'shot1', 'shot2', 'shot3', 'shot4', 'shot5',
-    'boost-speed', 'boost-damage', 'boost-health', 'boost-reload', 'boost-ammo',
-    'runboost-rage', 'runboost-damage', 'runboost-xp'
-].map(id => ({
-    id,
-    key: `upgrade-card-${id}`,
-    path: `assets/UpgradeCards/${id}.png`
-}));
-
-const PERMA_UPGRADE_CARD_IDS = {
-    menuSpeed: 'boost-speed',
-    menuDamage: 'boost-damage',
-    menuReload: 'boost-reload',
-    menuHealth: 'boost-health',
-    menuAmmo: 'boost-ammo',
-    menuRageBonus: 'runboost-rage',
-    menuRunDamage: 'runboost-damage',
-    menuXpBonus: 'runboost-xp'
-};
-
 const PERMA_STORE_VISUALS = {
     menuSpeed: { theme: 'speed', tag: 'BOOST', icon: 'SPD', main: '+1%', sub: 'Speed per level' },
     menuDamage: { theme: 'damage', tag: 'BOOST', icon: 'DMG', main: '+1%', sub: 'Damage per level' },
@@ -409,15 +358,6 @@ function getUpgradeVisualTheme(upgradeOrBranch) {
     return BRANCH_VISUALS[branch] || BRANCH_VISUALS.boost;
 }
 
-function getUpgradeCardAsset(id) {
-    return UPGRADE_CARD_ASSETS.find(asset => asset.id === id);
-}
-
-function getUpgradeCardAssetForUpgrade(upgrade) {
-    if (!upgrade) return null;
-    return getUpgradeCardAsset(PERMA_UPGRADE_CARD_IDS[upgrade.id] || upgrade.id);
-}
-
 function getUpgradePickCount(id) {
     return GameState.selectedUpgrades.filter(upgradeId => upgradeId === id).length;
 }
@@ -428,33 +368,6 @@ function hasUpgrade(id) {
 
 function meetsUpgradeRequirements(upgrade) {
     return !upgrade.requires || upgrade.requires.every(id => hasUpgrade(id));
-}
-
-function getCurrentPath() {
-    const defaultPath = CHARACTER_PATHS[GameState.selectedCharacter] || CHARACTER_PATHS[0];
-    const scores = {
-        classic: defaultPath.id === 'classic' ? 2 : 0,
-        taro: defaultPath.id === 'taro' ? 2 : 0,
-        matcha: defaultPath.id === 'matcha' ? 2 : 0,
-        brownSugar: defaultPath.id === 'brownSugar' ? 2 : 0
-    };
-
-    GameState.selectedUpgrades.forEach(id => {
-        const upgrade = UPGRADES.find(entry => entry.id === id);
-        if (!upgrade || !upgrade.pathTags) return;
-        upgrade.pathTags.forEach(tag => {
-            scores[tag] = (scores[tag] || 0) + 1;
-        });
-    });
-
-    let bestId = defaultPath.id;
-    Object.entries(scores).forEach(([id, score]) => {
-        if (score > scores[bestId]) {
-            bestId = id;
-        }
-    });
-
-    return Object.values(CHARACTER_PATHS).find(path => path.id === bestId) || defaultPath;
 }
 
 function buildWeightedUpgradeChoices() {
@@ -487,15 +400,6 @@ function buildWeightedUpgradeChoices() {
     }
 
     return chosen;
-}
-
-function calcMachineTPS() {
-    let tps = getBaseFactoryTPS();
-    MACHINES.forEach(machine => {
-        const level = GameState.machines[machine.id] || 0;
-        tps += machine.tps * level;
-    });
-    return tps;
 }
 
 function calcIdleMachineTPS() {
@@ -532,11 +436,6 @@ function getEnemyMaxHpForWave(wave) {
 
 function getXpPerKill(scene) {
     return Math.max(1, Math.floor(20 * (1 + (scene?.permaXpBonusPercent || 0))));
-}
-
-function getMachineCost(machine) {
-    const level = GameState.machines[machine.id] || 0;
-    return Math.floor(machine.baseCost * Math.pow(machine.costScale, level));
 }
 
 function getIdleMachineCost(machine) {
@@ -624,36 +523,10 @@ function meetsPermaRequirements(upgrade) {
     return !upgrade.requires || upgrade.requires.every(id => getPermaUpgradeLevel(id) > 0);
 }
 
-function getTotalPermaPointsEarned() {
-    return Math.floor(GameState.totalEnemiesKilled / 1000);
-}
-
-function getSpentPermaPoints() {
-    return PERMA_UPGRADES.reduce((sum, upgrade) => {
-        return sum + (getPermaUpgradeLevel(upgrade.id) * (upgrade.pointCost || upgrade.cost || 0));
-    }, 0);
-}
-
-function getAvailablePermaPoints() {
-    return Math.max(0, getTotalPermaPointsEarned() - getSpentPermaPoints());
-}
-
 function canBuyPermaUpgrade(upgrade) {
     return getPermaUpgradeLevel(upgrade.id) < upgrade.maxLevel
         && meetsPermaRequirements(upgrade)
         && GameState.tapioca >= getPermaUpgradeCost(upgrade);
-}
-
-function getTotalPermanentUpgradesOwned() {
-    return Object.values(GameState.factoryUpgrades).reduce((sum, level) => sum + level, 0);
-}
-
-function getFactoryRepairCost() {
-    return 12 + (GameState.factoryRepairCount * 6);
-}
-
-function getFactoryFortifyCost() {
-    return 24 + (GameState.factoryFortifyLevel * 14);
 }
 
 function getReadableUpgradeStatus(upgrade) {
@@ -663,10 +536,6 @@ function getReadableUpgradeStatus(upgrade) {
 function resetRunOnlyProgress() {
     GameState.reset();
     GameState.runBoosts = {};
-}
-
-function getBaseFactoryTPS() {
-    return 1 + getPermaUpgradeLevel('corePrimer');
 }
 
 function resetCanvasInput(scene) {
@@ -739,7 +608,7 @@ function forceSceneTransition(scene, targetKey, resetRun = true) {
 
     globalThis.setTimeout(() => {
         try {
-            const menuSideScenes = ['ControlsScene', 'IdleFactoryScene', 'PermaUpgradeScene', 'CampaignMapScene'];
+            const menuSideScenes = ['ControlsScene', 'IdleFactoryScene', 'PermaUpgradeScene'];
             const scenesToStop = new Set([...RUN_SCENE_KEYS, ...menuSideScenes]);
             if (targetKey === 'MenuScene') {
                 scenesToStop.add('MenuScene');
@@ -826,12 +695,6 @@ function addFlavorBadge(scene, x, y, text, theme, width = 116) {
         align: 'center'
     }).setOrigin(0.5);
     return { badge, label };
-}
-
-function addUpgradeCardArt(scene, x, y, upgrade, width, height, alpha = 1) {
-    const asset = getUpgradeCardAssetForUpgrade(upgrade);
-    if (!asset || !scene.textures.exists(asset.key)) return null;
-    return scene.add.image(x, y, asset.key).setDisplaySize(width, height).setAlpha(alpha);
 }
 
 function createPermanentStoreCard(scene, x, y, upgrade, width, height) {
@@ -949,8 +812,7 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'upgrade-damage', path: 'assets/Boba_Upgrades/upgrade-damage.png' },
     { key: 'upgrade-health', path: 'assets/Boba_Upgrades/upgrade-health.png' },
     { key: 'upgrade-pierce', path: 'assets/Boba_Upgrades/upgrade-pierce.png' },
-    { key: 'upgrade-bounce', path: 'assets/Boba_Upgrades/upgrade-bounce.png' },
-    ...UPGRADE_CARD_ASSETS.map(asset => ({ key: asset.key, path: asset.path }))
+    { key: 'upgrade-bounce', path: 'assets/Boba_Upgrades/upgrade-bounce.png' }
 ];
 
 // ============================================
@@ -1235,6 +1097,17 @@ class BootScene extends Phaser.Scene {
         xpOrbG.generateTexture('xp_pickup', 24, 24);
         xpOrbG.destroy();
 
+        const healOrbG = this.add.graphics();
+        healOrbG.fillStyle(0x70ff9e, 0.30);
+        healOrbG.fillCircle(12, 12, 12);
+        healOrbG.fillStyle(0x7cff8a, 1);
+        healOrbG.fillCircle(12, 12, 7);
+        healOrbG.fillStyle(0xffffff, 0.95);
+        healOrbG.fillRect(10, 6, 4, 12);
+        healOrbG.fillRect(6, 10, 12, 4);
+        healOrbG.generateTexture('heal_pickup', 24, 24);
+        healOrbG.destroy();
+
         // UI elements
         const btnG = this.add.graphics();
         btnG.fillStyle(BOBA_THEME.glass);
@@ -1294,7 +1167,7 @@ class MenuScene extends Phaser.Scene {
         this.killText = this.add.text(74, 154, '', { fontSize: '15px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
         this.add.image(52, 70, 'player_boba').setScale(0.045);
         this.add.text(52, 112, 'R', { fontSize: '22px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.add.text(52, 154, 'P', { fontSize: '22px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        this.add.text(52, 154, 'K', { fontSize: '22px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
         this.add.rectangle(92, 91, 132, 1, 0x536784, 0.45);
         this.add.rectangle(92, 133, 132, 1, 0x536784, 0.45);
 
@@ -1313,7 +1186,6 @@ class MenuScene extends Phaser.Scene {
         this.makeTopIconButton(735, 70, 'Controls', () => this.scene.launch('ControlsScene'));
         this.makeTopIconButton(845, 70, 'Upgrades', () => this.scene.start('PermaUpgradeScene'));
         this.makeTopIconButton(945, 70, 'Factory', () => this.scene.start('IdleFactoryScene'));
-        this.makeTopIconButton(625, 70, 'Map', () => this.scene.start('CampaignMapScene', { fromMenu: true }));
 
         createPanel(this, 330, 360, 330, 300, 0x0d241e, 0x3a7a55, 0.92);
         createPanel(this, 705, 360, 330, 300, 0x0b1722, 0x536784, 0.92);
@@ -1334,34 +1206,26 @@ class MenuScene extends Phaser.Scene {
             lineSpacing: 5
         }).setOrigin(0.5);
 
-        this.add.text(705, 230, 'RUN INFO', {
+        this.add.text(705, 230, 'CHARACTER BUILD', {
             fontSize: '18px',
             fill: '#ffe7aa',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
-        this.add.rectangle(705, 332, 284, 126, 0x07121d, 0.74).setStrokeStyle(2, 0x243c57);
-        this.factoryPreview = this.add.image(705, 330, 'factory-ingame').setScale(0.16).setAlpha(0.98);
-        createPanel(this, 705, 431, 284, 52, 0x241b13, 0x775b3b, 0.94);
-        this.factoryPreviewLabel = this.add.text(705, 431, 'IDLE FACTORY RUNS OUTSIDE COMBAT.\nRUNS ARE PLAYER-ONLY.', {
+        this.add.rectangle(705, 322, 284, 104, 0x07121d, 0.74).setStrokeStyle(2, 0x243c57);
+        this.buildDrinkPreview = this.add.image(660, 322, 'player_boba').setScale(0.13).setAlpha(0.98);
+        this.buildGunPreview = this.add.image(760, 322, 'boba_gun').setScale(0.06).setAlpha(0.98);
+        this.buildNameText = this.add.text(705, 382, '', {
             fontSize: '13px',
-            fill: '#ffd39d',
+            fill: '#fff4d6',
             align: 'center',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
-        this.runHintText = this.add.text(705, 494, 'Idle factory generates tapioca.\nRage upgrades the factory outside runs.\nLevel-ups grant combat upgrades.', {
+        this.createBuildSelector();
+        this.runHintText = this.add.text(705, 544, 'Pick a drink body and a gun.\nLevel-ups still add combat upgrades during runs.', {
             fontSize: '13px',
             fill: '#c2cbda',
             align: 'center',
             lineSpacing: 4
-        }).setOrigin(0.5);
-
-        const campaign = getCampaignLocation();
-        const unlocked = GameState.campaignUnlockedIndex + 1;
-        this.add.text(705, 544, `CAMPAIGN: ${campaign.name.toUpperCase()}   ${unlocked}/${CAMPAIGN_LOCATIONS.length} MAP STOPS`, {
-            fontSize: '13px',
-            fill: '#ffe7aa',
-            align: 'center',
-            fontFamily: 'Arial Black'
         }).setOrigin(0.5);
 
         this.makeButton(215, 590, 'START GAME', () => {
@@ -1481,13 +1345,67 @@ class MenuScene extends Phaser.Scene {
     updateDisplays() {
         this.tapiocaText.setText('TAPIOCA\n' + Math.floor(GameState.tapioca));
         this.rageBankText.setText('RAGE\n' + Math.floor(GameState.rage));
-        this.killText.setText('PERMA PTS\n' + getAvailablePermaPoints() + ' / ' + getTotalPermaPointsEarned());
+        this.killText.setText('KILLS\n' + GameState.totalEnemiesKilled);
+        this.updateBuildPreview();
         if (this.volumePercent) {
             this.volumePercent.setText(String(Math.floor(GameState.volume * 100)) + '%');
         }
         if (this.aimModeLabel) {
             this.aimModeLabel.setText(GameState.aimMode === 'manual' ? 'MANUAL' : 'AUTO');
         }
+    }
+
+    createBuildSelector() {
+        this.drinkButtons = DRINK_OPTIONS.map((option, index) => {
+            return this.makeBuildOption(622 + index * 166, 430, 150, option.name, 'drink', option.id, option.accent);
+        });
+        this.gunButtons = GUN_OPTIONS.map((option, index) => {
+            return this.makeBuildOption(622 + index * 166, 490, 150, option.name, 'gun', option.id, option.accent);
+        });
+    }
+
+    makeBuildOption(x, y, width, text, type, id, accent) {
+        const btn = this.add.rectangle(x, y, width, 38, 0x111c28, 0.96)
+            .setStrokeStyle(2, accent)
+            .setInteractive({ useHandCursor: true });
+        const label = this.add.text(x, y, text.toUpperCase(), {
+            fontSize: '11px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black',
+            align: 'center'
+        }).setOrigin(0.5);
+        const select = () => {
+            if (type === 'drink') {
+                GameState.selectedDrink = id;
+            } else {
+                GameState.selectedGun = id;
+            }
+            sanitizeBuildState();
+            SaveManager.save();
+            this.updateDisplays();
+        };
+        btn.on('pointerover', () => btn.setFillStyle(0x1c2b3d, 0.98));
+        btn.on('pointerout', () => this.updateBuildPreview());
+        btn.on('pointerdown', select);
+        label.setInteractive({ useHandCursor: true }).on('pointerdown', select);
+        return { btn, label, type, id, accent };
+    }
+
+    updateBuildPreview() {
+        if (!this.buildDrinkPreview || !this.buildGunPreview) return;
+        const drink = getDrinkOption();
+        const gun = getGunOption();
+        this.buildDrinkPreview.setTexture(drink.playerTexture).setScale(drink.playerScale * 1.6);
+        this.buildGunPreview.setTexture(gun.gunTexture).setScale(gun.gunScale * 1.2);
+        this.buildNameText?.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
+        [...(this.drinkButtons || []), ...(this.gunButtons || [])].forEach(entry => {
+            const selected = entry.type === 'drink'
+                ? entry.id === drink.id
+                : entry.id === gun.id;
+            entry.btn.setFillStyle(selected ? 0x26304a : 0x111c28, 0.96);
+            entry.btn.setStrokeStyle(selected ? 3 : 2, selected ? 0xffd700 : entry.accent);
+            entry.label.setColor(selected ? '#ffe4a3' : '#fff7e6');
+        });
     }
 
     makeButton(x, y, text, callback, accent = 0x7ed2ff, fill = 0x122438, width = 170) {
@@ -1504,187 +1422,6 @@ class MenuScene extends Phaser.Scene {
         });
         btn.on('pointerdown', callback);
 
-        return btn;
-    }
-}
-
-// ============================================
-// CAMPAIGN MAP SCENE
-// ============================================
-class CampaignMapScene extends Phaser.Scene {
-    constructor() {
-        super({ key: 'CampaignMapScene' });
-    }
-
-    create(data = {}) {
-        sanitizeCampaignState();
-        this.fromRun = Boolean(data.fromRun);
-        this.fromMenu = Boolean(data.fromMenu);
-        resetCanvasInput(this);
-
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x071018, this.fromRun ? 0.94 : 1).setInteractive();
-        drawSceneBackdrop(this, 0x456b86);
-        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 980, 680, 0x101826, 0x536784, 0.96);
-
-        this.add.text(GAME_CENTER_X, 48, 'CAMPAIGN MAP', {
-            fontSize: '42px',
-            fill: '#fff4d6',
-            fontFamily: 'Arial Black',
-            stroke: '#2f2717',
-            strokeThickness: 4
-        }).setOrigin(0.5);
-
-        this.add.text(GAME_CENTER_X, 88, 'Earn souls from kills in a single run, then challenge the local boss to move forward.', {
-            fontSize: '15px',
-            fill: '#c9d6e4',
-            align: 'center'
-        }).setOrigin(0.5);
-
-        this.drawMapSurface();
-        this.drawRoute();
-        this.drawLocationNodes();
-        this.createSoulPanel();
-        this.createActions();
-    }
-
-    drawMapSurface() {
-        const map = this.add.graphics();
-        map.fillStyle(0x0a1420, 0.92);
-        map.fillRoundedRect(34, 118, 932, 426, 12);
-        map.lineStyle(2, 0x2e4d66, 0.65);
-        map.strokeRoundedRect(34, 118, 932, 426, 12);
-
-        map.fillStyle(0x18374b, 0.34);
-        map.fillEllipse(214, 320, 250, 178);
-        map.fillEllipse(370, 462, 190, 136);
-        map.fillEllipse(558, 322, 196, 170);
-        map.fillEllipse(736, 366, 260, 150);
-        map.fillEllipse(860, 292, 150, 112);
-
-        for (let x = 76; x <= 928; x += 76) {
-            map.lineStyle(1, 0x31506b, 0.15);
-            map.lineBetween(x, 136, x, 526);
-        }
-        for (let y = 154; y <= 510; y += 44) {
-            map.lineStyle(1, 0x31506b, 0.15);
-            map.lineBetween(52, y, 948, y);
-        }
-    }
-
-    drawRoute() {
-        const route = this.add.graphics();
-        route.lineStyle(4, 0x4d6e87, 0.58);
-        for (let i = 0; i < CAMPAIGN_LOCATIONS.length - 1; i++) {
-            const a = CAMPAIGN_LOCATIONS[i];
-            const b = CAMPAIGN_LOCATIONS[i + 1];
-            route.lineBetween(a.x, a.y, b.x, b.y);
-        }
-        route.lineStyle(5, 0xffd27a, 0.86);
-        for (let i = 0; i < Math.min(GameState.campaignUnlockedIndex, CAMPAIGN_LOCATIONS.length - 1); i++) {
-            const a = CAMPAIGN_LOCATIONS[i];
-            const b = CAMPAIGN_LOCATIONS[i + 1];
-            route.lineBetween(a.x, a.y, b.x, b.y);
-        }
-    }
-
-    drawLocationNodes() {
-        CAMPAIGN_LOCATIONS.forEach((location, index) => {
-            const unlocked = index <= GameState.campaignUnlockedIndex;
-            const active = index === GameState.campaignLocationIndex;
-            const cleared = Boolean(GameState.campaignCleared?.[location.id]);
-            const fill = active ? location.accent : cleared ? 0x67d58a : unlocked ? 0x203549 : 0x121923;
-            const stroke = active ? 0xfff0b8 : unlocked ? location.accent : 0x4a5563;
-
-            const node = this.add.circle(location.x, location.y, active ? 28 : 23, fill, unlocked ? 0.96 : 0.72)
-                .setStrokeStyle(active ? 4 : 2, stroke)
-                .setInteractive({ useHandCursor: unlocked && !this.fromRun });
-            this.add.text(location.x, location.y, location.shortName, {
-                fontSize: '13px',
-                fill: unlocked ? '#fff7e6' : '#788390',
-                fontFamily: 'Arial Black'
-            }).setOrigin(0.5);
-            this.add.text(location.x, location.y + 42, location.name.toUpperCase(), {
-                fontSize: active ? '13px' : '11px',
-                fill: active ? '#fff0b8' : unlocked ? '#d7e4ef' : '#7c8794',
-                fontFamily: 'Arial Black'
-            }).setOrigin(0.5);
-
-            if (!this.fromRun && unlocked) {
-                node.on('pointerdown', () => {
-                    if (GameState.campaignLocationIndex !== index) {
-                        GameState.campaignLocationIndex = index;
-                        resetRunOnlyProgress();
-                    }
-                    SaveManager.save();
-                    this.scene.restart({ fromMenu: true });
-                });
-            }
-        });
-    }
-
-    createSoulPanel() {
-        const location = getCampaignLocation();
-        const progress = getCampaignSoulProgress();
-        createPanel(this, GAME_CENTER_X, 582, 680, 80, 0x151b2b, 0x425072, 0.96);
-
-        this.add.text(202, 560, `CURRENT STOP: ${location.name.toUpperCase()}`, {
-            fontSize: '16px',
-            fill: '#fff4d6',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0, 0.5);
-        this.add.text(202, 590, `Boss: ${location.boss}`, {
-            fontSize: '13px',
-            fill: '#b9c8d9'
-        }).setOrigin(0, 0.5);
-
-        this.add.rectangle(622, 576, 270, 18, 0x2a1a22).setOrigin(0, 0.5).setStrokeStyle(2, 0x6d4c5f);
-        this.add.rectangle(624, 576, 266 * progress.pct, 12, 0xd96bd8).setOrigin(0, 0.5);
-        this.add.text(757, 576, `${progress.souls} / ${progress.target} SOULS`, {
-            fontSize: '13px',
-            fill: '#fff7e6',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-    }
-
-    createActions() {
-        const progress = getCampaignSoulProgress();
-        const canAdvance = progress.souls >= progress.target;
-        const allCleared = GameState.campaignLocationIndex >= CAMPAIGN_LOCATIONS.length - 1 && canAdvance;
-        const bossLabel = allCleared ? 'FINAL BOSS READY' : canAdvance ? 'BOSS READY' : 'BOSS LOCKED';
-
-        this.makeMapButton(366, 662, bossLabel, () => {
-            if (!canAdvance) return;
-            advanceCampaignLocation();
-            this.scene.restart({ fromRun: this.fromRun, fromMenu: this.fromMenu });
-        }, canAdvance ? 0xffd27a : 0x546070, canAdvance ? 0x3a2810 : 0x17202b, 220);
-
-        this.makeMapButton(630, 662, this.fromRun ? 'RESUME RUN' : 'MAIN MENU', () => {
-            if (this.fromRun) {
-                GameState.paused = false;
-                const gameScene = this.scene.get('GameScene');
-                this.scene.stop();
-                this.scene.resume('GameScene');
-                if (gameScene?.updateUI) {
-                    gameScene.updateUI();
-                }
-                return;
-            }
-            this.scene.start('MenuScene');
-        }, 0x7ed2ff, 0x102f42, 190);
-    }
-
-    makeMapButton(x, y, text, callback, accent, fill, width) {
-        const btn = this.add.rectangle(x, y, width, 44, fill, 0.98)
-            .setStrokeStyle(3, accent)
-            .setInteractive({ useHandCursor: true });
-        this.add.text(x, y, text, {
-            fontSize: '14px',
-            fill: '#fff7e6',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-        btn.on('pointerover', () => btn.setFillStyle(fill + 0x080808, 1));
-        btn.on('pointerout', () => btn.setFillStyle(fill, 0.98));
-        btn.on('pointerdown', callback);
         return btn;
     }
 }
@@ -1999,60 +1736,6 @@ class PermaUpgradeScene extends Phaser.Scene {
         this.treeGraphics.lineBetween(170, 320, 170, 400);
     }
 
-    createUpgradeNode(x, y, upgrade) {
-        const card = createPanel(this, x, y, 186, 58, 0x1f2940, 0x4c5d83, 0.98).setInteractive({ useHandCursor: true });
-        const name = this.add.text(x, y - 12, upgrade.name, {
-            fontSize: '14px',
-            fill: '#fff7e6',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-        const status = this.add.text(x, y + 12, '', {
-            fontSize: '12px',
-            fill: '#9bd2ff',
-            align: 'center'
-        }).setOrigin(0.5);
-        const select = () => this.buyPermaUpgrade(upgrade.id);
-        card.on('pointerdown', select);
-        card.on('pointerover', () => this.showUpgradeDetails(upgrade));
-        name.setInteractive({ useHandCursor: true }).on('pointerdown', select).on('pointerover', () => this.showUpgradeDetails(upgrade));
-        status.setInteractive({ useHandCursor: true }).on('pointerdown', select).on('pointerover', () => this.showUpgradeDetails(upgrade));
-        return { card, name, status, upgrade };
-    }
-
-    updateTree() {
-        if (this.shopCards) {
-            this.updateUpgradeShop();
-            return;
-        }
-        const nextPointAt = (Math.floor(GameState.totalEnemiesKilled / 1000) + 1) * 1000;
-        this.summaryText.setText(`POINTS ${getAvailablePermaPoints()} / ${getTotalPermaPointsEarned()}   |   KILLS ${GameState.totalEnemiesKilled}   |   NEXT POINT AT ${nextPointAt}`);
-        this.treeNodes.forEach(node => {
-            const owned = getPermaUpgradeLevel(node.upgrade.id);
-            const canBuy = canBuyPermaUpgrade(node.upgrade);
-            const unlocked = meetsPermaRequirements(node.upgrade);
-            const isMaxed = owned >= node.upgrade.maxLevel;
-            node.status.setText(`${node.upgrade.desc}\n${getReadableUpgradeStatus(node.upgrade)} ${isMaxed ? 'MAX' : `| ${node.upgrade.cost} PT`}`);
-            if (isMaxed) {
-                node.card.setFillStyle(0x284234, 0.98);
-                node.card.setStrokeStyle(2, 0x5fe08c);
-                node.status.setColor('#aef1c0');
-            } else if (canBuy) {
-                node.card.setFillStyle(0x26304a, 0.98);
-                node.card.setStrokeStyle(2, 0xffd700);
-                node.status.setColor('#ffe4a3');
-            } else if (unlocked) {
-                node.card.setFillStyle(0x2b2430, 0.98);
-                node.card.setStrokeStyle(2, 0x8f719f);
-                node.status.setColor('#d9c2eb');
-            } else {
-                node.card.setFillStyle(0x1b1e2a, 0.98);
-                node.card.setStrokeStyle(2, 0x485066);
-                node.status.setColor('#8892aa');
-            }
-        });
-        this.showUpgradeDetails(PERMA_UPGRADES[0]);
-    }
-
     updateUpgradeShop() {
         this.summaryText.setText(`TAPIOCA ${Math.floor(GameState.tapioca)}   |   Hover a card to see price   |   Click to buy one level`);
         this.shopCards.forEach(node => {
@@ -2138,8 +1821,8 @@ class ControlsScene extends Phaser.Scene {
             'Survive the run.',
             'TC buys run upgrades.',
             'Rage upgrades the idle factory.',
-            'Every 1000 kills gives 1 perma point.',
-            'Buy permanent upgrades from the menu tree.'
+            'Kills give TC, rage, XP, and sometimes pickups.',
+            'Spend tapioca on menu upgrades between runs.'
         ];
 
         controls.forEach((line, i) => {
@@ -2335,25 +2018,21 @@ class GameScene extends Phaser.Scene {
         this.playerDamage = char.damage;
         this.basePlayerDamage = char.damage;
         this.playerFireRate = char.fireRate;
-        this.weaponProfile = getCampaignWeaponProfile();
+        this.weaponProfile = getSelectedBuildProfile();
         this.playerTextureKey = this.weaponProfile.playerTexture;
         this.gunTextureKey = this.weaponProfile.gunTexture;
         this.projectileTextureKey = this.weaponProfile.projectileTexture;
         this.playerSpeed *= 1 + ((GameState.idleMachines?.ballRoller || 0) * 0.01);
-        this.playerDamage *= 1 + ((GameState.idleMachines?.ballMaker || 0) * 0.005);
         this.multiShot = char.multiShot || 1;
         this.maxBounces = char.maxBounces || 0;
         this.projectilePierce = 0;
-        this.projectileSpeed = 500;
-        this.projectileScale = 0.18;
-        if (this.weaponProfile.id === 'lychee-shotgun') {
-            this.playerDamage = this.weaponProfile.projectileDamage;
-            this.basePlayerDamage = this.weaponProfile.projectileDamage;
-            this.playerFireRate = this.weaponProfile.fireRate;
-            this.multiShot = this.weaponProfile.projectileCount;
-            this.projectileSpeed = this.weaponProfile.projectileSpeed;
-            this.projectileScale = this.weaponProfile.projectileScale;
-        }
+        this.projectileSpeed = this.weaponProfile.projectileSpeed || 500;
+        this.projectileScale = this.weaponProfile.projectileScale || 0.18;
+        this.playerDamage *= this.weaponProfile.damageMultiplier || 1;
+        this.basePlayerDamage *= this.weaponProfile.damageMultiplier || 1;
+        this.playerFireRate *= this.weaponProfile.fireRateMultiplier || 1;
+        this.multiShot = this.weaponProfile.projectileCount || this.multiShot;
+        this.playerDamage *= 1 + ((GameState.idleMachines?.ballMaker || 0) * 0.005);
         this.pierceDamageScale = 0;
         this.bounceDamageScale = 0;
         this.wallSplitCount = 0;
@@ -2368,13 +2047,8 @@ class GameScene extends Phaser.Scene {
         this.enemyIdCounter = 0;
         this.damageNumberCounter = 0;
         this.lastFireTime = -Infinity;
-        this.permaFactoryBaseTpsBonus = 0;
         this.permaStartingRageBonus = 0;
         this.permaMaxAmmoBonus = 0;
-        this.permaFactoryMaxHealthBonus = 0;
-        this.permaFactoryWaveRegenBonus = 0;
-        this.permaFactoryAttackRateMultiplier = 1;
-        this.permaFactoryAmmoPerSecond = 2;
         this.permaEarlyWaveRageBonus = 0;
         this.permaRageBonusPercent = 0;
         this.permaXpBonusPercent = 0;
@@ -2384,7 +2058,6 @@ class GameScene extends Phaser.Scene {
         this.deathTransitionPending = false;
         this.switchingScene = false;
         this.waveTransitioning = false;
-        this.factoryInvincibleUntil = 0;
         this.playerInvincibleUntil = 0;
         this.dashCharges = 2;
         this.maxDashCharges = 2;
@@ -2439,7 +2112,9 @@ class GameScene extends Phaser.Scene {
         this.bobas = this.physics.add.group();
         this.enemyProjectiles = this.physics.add.group();
         this.xpPickups = this.physics.add.group();
+        this.healingPickups = this.physics.add.group();
         this.physics.add.overlap(this.player, this.xpPickups, this.collectXpPickup, null, this);
+        this.physics.add.overlap(this.player, this.healingPickups, this.collectHealingPickup, null, this);
         this.physics.add.overlap(this.player, this.enemyProjectiles, this.hitPlayerWithEnemyProjectile, null, this);
 
         this.cursors = this.input.keyboard.addKeys({
@@ -2461,6 +2136,13 @@ class GameScene extends Phaser.Scene {
         this.saveTimer = this.time.addEvent({
             delay: 30000,
             callback: () => SaveManager.save(),
+            loop: true
+        });
+
+        this.runIdleProductionTimer = this.time.addEvent({
+            delay: IDLE_RUN_TAPIOCA_TICK_MS,
+            callback: this.tickRunIdleProduction,
+            callbackScope: this,
             loop: true
         });
 
@@ -2499,25 +2181,6 @@ class GameScene extends Phaser.Scene {
         this.updateUI();
     }
 
-    createFactory() {
-        this.factory = { x: 400, y: 300, radius: 58 };
-        this.factoryGlow = this.add.circle(this.factory.x, this.factory.y, 92, 0xff9955, 0.12).setDepth(0);
-        this.factoryBase = this.add.circle(this.factory.x, this.factory.y + 18, 72, 0x2a1a12, 0.95).setDepth(0);
-        this.factoryShadow = this.add.ellipse(this.factory.x, this.factory.y + 58, 170, 30, 0x000000, 0.25).setDepth(0);
-        this.factorySprite = this.add.image(this.factory.x, this.factory.y, 'factory-ingame').setScale(0.22).setDepth(1);
-        this.factoryLabel = this.add.text(this.factory.x, 186, 'TAPIOCA FACTORY', {
-            fontSize: '16px',
-            fill: '#ffd27a',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5).setDepth(3);
-        this.factoryHealthBg = this.add.rectangle(this.factory.x, 208, 138, 10, 0x341313).setDepth(3);
-        this.factoryHealthFill = this.add.rectangle(this.factory.x - 67, 208, 134, 6, 0xff7a45).setOrigin(0, 0.5).setDepth(3);
-        this.factoryOutputText = this.add.text(this.factory.x, 225, '+0 TC/s', {
-            fontSize: '12px',
-            fill: '#ffe9a6'
-        }).setOrigin(0.5).setDepth(3);
-    }
-
     createPlayer() {
         this.player = this.physics.add.sprite(GAME_CENTER_X, GAME_HEIGHT - 180, this.playerTextureKey || 'player_boba');
         this.player.setOrigin(0.5);
@@ -2541,7 +2204,6 @@ class GameScene extends Phaser.Scene {
     createHud() {
         createNeonPanel(this, 118, 140, 220, 156, BRANCH_VISUALS.machine, 0.84).setDepth(4);
         createNeonPanel(this, GAME_WIDTH - 98, 78, 184, 122, BRANCH_VISUALS.speed, 0.84).setDepth(4);
-        createNeonPanel(this, GAME_CENTER_X, 24, 284, 36, BRANCH_VISUALS.evolution, 0.84).setDepth(4);
         addFlavorBadge(this, 118, 70, 'NEON BOBA POS', BRANCH_VISUALS.machine, 138);
         addFlavorBadge(this, GAME_WIDTH - 98, 18, 'ORDER BOARD', BRANCH_VISUALS.speed, 116);
         this.bobaCountText = this.add.text(18, 80, '', { fontSize: '14px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
@@ -2563,10 +2225,6 @@ class GameScene extends Phaser.Scene {
         this.xpBarFill.displayWidth = 0;
         this.xpText = this.add.text(100, 55, '', { fontSize: '12px', fill: '#090b12', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
 
-        this.soulBarBg = this.add.rectangle(GAME_CENTER_X - 104, 24, 164, 12, BOBA_THEME.plum).setOrigin(0, 0.5).setDepth(5);
-        this.soulBarBg.setStrokeStyle(1, BOBA_THEME.taro);
-        this.soulBarFill = this.add.rectangle(GAME_CENTER_X - 103, 24, 0, 8, BOBA_THEME.taro).setOrigin(0, 0.5).setDepth(5);
-        this.soulText = this.add.text(GAME_CENTER_X + 4, 24, '', { fontSize: '12px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5).setDepth(5);
         this.waveText = this.add.text(GAME_WIDTH - 100, 34, 'WAVE 1', { fontSize: '18px', fill: '#ffe7b3', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
         this.scoreText = this.add.text(GAME_WIDTH - 100, 59, 'SCORE: 0', { fontSize: '14px', fill: '#d5e4ff' }).setOrigin(0.5, 0.5).setDepth(5);
         this.levelText = this.add.text(GAME_WIDTH - 100, 84, 'LVL 1', { fontSize: '14px', fill: '#38d9ff', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
@@ -2605,6 +2263,7 @@ class GameScene extends Phaser.Scene {
         this.updateEnemyHealthBars();
         this.updateFactoryVisual(time);
         this.updateXpPickups();
+        this.updateHealingPickups();
         this.validateProjectiles();
         this.validateEnemyProjectiles();
 
@@ -2842,8 +2501,12 @@ class GameScene extends Phaser.Scene {
         this.xpPickups.children.entries.forEach(pickup => {
             if (!pickup.active) return;
             const dist = Phaser.Math.Distance.Between(pickup.x, pickup.y, this.player.x, this.player.y);
-            if (dist < 150) {
-                const speed = Phaser.Math.Linear(120, 360, Math.max(0, (150 - dist) / 150));
+            if (dist < XP_ORB_MAGNET_RANGE) {
+                const pull = Math.max(0, (XP_ORB_MAGNET_RANGE - dist) / XP_ORB_MAGNET_RANGE);
+                const speed = Math.max(
+                    this.getEffectivePlayerSpeed() + XP_ORB_PLAYER_SPEED_BONUS,
+                    Phaser.Math.Linear(XP_ORB_MIN_SPEED, XP_ORB_MAX_SPEED, pull)
+                );
                 this.physics.moveToObject(pickup, this.player, speed);
             }
         });
@@ -2858,6 +2521,63 @@ class GameScene extends Phaser.Scene {
         this.showDamageNumber(player.x, player.y - 34, `+${amount} XP`, '#7ed2ff');
         this.updateUI();
         this.maybeLaunchLevelUpgrade();
+    }
+
+    spawnHealingPickup(x, y) {
+        if (!this.healingPickups) return;
+        const pickup = this.physics.add.image(x, y, 'heal_pickup');
+        pickup.healAmount = HEALING_ORB_HEAL_AMOUNT;
+        pickup.setDepth(2);
+        pickup.setScale(1);
+        pickup.body.setCircle(8, 4, 4);
+        pickup.body.setAllowGravity(false);
+        pickup.body.setVelocity(Phaser.Math.Between(-35, 35), Phaser.Math.Between(-45, 20));
+        pickup.body.setDrag(120, 120);
+        this.healingPickups.add(pickup);
+        this.tweens.add({
+            targets: pickup,
+            scale: 1.16,
+            yoyo: true,
+            repeat: -1,
+            duration: 420
+        });
+    }
+
+    updateHealingPickups() {
+        if (!this.healingPickups || !this.player?.active) return;
+        this.healingPickups.children.entries.forEach(pickup => {
+            if (!pickup.active) return;
+            const dist = Phaser.Math.Distance.Between(pickup.x, pickup.y, this.player.x, this.player.y);
+            if (dist < XP_ORB_MAGNET_RANGE) {
+                const pull = Math.max(0, (XP_ORB_MAGNET_RANGE - dist) / XP_ORB_MAGNET_RANGE);
+                const speed = Math.max(
+                    this.getEffectivePlayerSpeed() + XP_ORB_PLAYER_SPEED_BONUS,
+                    Phaser.Math.Linear(XP_ORB_MIN_SPEED, XP_ORB_MAX_SPEED, pull)
+                );
+                this.physics.moveToObject(pickup, this.player, speed);
+            }
+        });
+    }
+
+    collectHealingPickup(player, pickup) {
+        if (!pickup.active) return;
+        const amount = pickup.healAmount || HEALING_ORB_HEAL_AMOUNT;
+        pickup.destroy();
+        const before = GameState.health;
+        GameState.health = Math.min(GameState.maxHealth, GameState.health + amount);
+        const healed = Math.ceil(GameState.health - before);
+        this.showDamageNumber(player.x, player.y - 52, `+${healed} HP`, '#7cff8a');
+        this.updateUI();
+    }
+
+    tickRunIdleProduction() {
+        if (GameState.paused || this.runEnded) return;
+        const gain = calcIdleMachineTPS();
+        if (gain <= 0) return;
+        GameState.tapioca += gain;
+        GameState.totalTapioca += gain;
+        GameState.runTapiocaEarned += gain;
+        this.updateUI();
     }
 
     maybeLaunchLevelUpgrade() {
@@ -3084,13 +2804,9 @@ class GameScene extends Phaser.Scene {
         this.currentGunMuzzle = muzzle;
 
         let fired = false;
-        const projectileCount = this.weaponProfile?.id === 'lychee-shotgun'
-            ? this.weaponProfile.projectileCount
-            : this.multiShot;
+        const projectileCount = Math.max(1, this.multiShot || 1);
         const spread = this.weaponProfile?.spread || 0.4;
-        const projectileDamage = this.weaponProfile?.id === 'lychee-shotgun'
-            ? this.weaponProfile.projectileDamage
-            : this.playerDamage;
+        const projectileDamage = this.playerDamage;
 
         // Fire shotgun/multishot pearls evenly from the same gun muzzle point.
         if (projectileCount === 1) {
@@ -3242,27 +2958,6 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    factoryAutoDefend() {
-    }
-
-    factoryAmmoSupport() {
-        if (!this.factory) return;
-        if (GameState.paused || this.waveTransitioning || this.playerDown) return;
-
-        const distToFactory = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.factory.x, this.factory.y);
-        if (distToFactory > this.factory.radius) return;
-        if (this.bobaCount >= this.maxBobaCount) return;
-
-        const ammoGain = Math.max(1, Math.round(this.permaFactoryAmmoPerSecond * 0.5));
-        this.bobaCount = Math.min(this.maxBobaCount, this.bobaCount + ammoGain);
-        this.updateBobaDisplay();
-
-        if (this.isReloading) {
-            this.isReloading = false;
-            this.reloadText.setVisible(false);
-        }
-    }
-
     findNearestEnemy(x, y, maxDistance = Infinity) {
         let nearest = null;
         let nearestDist = Infinity;
@@ -3298,45 +2993,6 @@ class GameScene extends Phaser.Scene {
             this.reloadText.setVisible(false);
             this.updateBobaDisplay();
         });
-    }
-
-    pickupBoba(player, boba) {
-    }
-
-    tickFactoryProduction() {
-        if (!this.factory) return;
-        if (GameState.paused) return;
-
-        const tps = calcMachineTPS();
-        if (tps > 0) {
-            const tapiocaGain = tps / 10;
-            GameState.tapioca += tapiocaGain;
-            GameState.totalTapioca += tapiocaGain;
-            GameState.runTapiocaEarned += tapiocaGain;
-
-            const pearlCount = Math.min(3, Math.max(1, Math.ceil(tps / 35)));
-            for (let i = 0; i < pearlCount; i++) {
-                if (Math.random() > 0.18) continue;
-                const pearl = this.add.circle(
-                    this.factory.x + Phaser.Math.Between(-34, 34),
-                    this.factory.y + Phaser.Math.Between(-12, 18),
-                    Phaser.Math.Between(4, 7),
-                    0x5b2f10
-                ).setDepth(2);
-                this.tweens.add({
-                    targets: pearl,
-                    x: 110 + Phaser.Math.Between(-10, 10),
-                    y: 158 + Phaser.Math.Between(-8, 8),
-                    alpha: 0,
-                    scale: 0.35,
-                    duration: 700,
-                    ease: 'Sine.easeIn',
-                    onComplete: () => pearl.destroy()
-                });
-            }
-        }
-
-        this.updateUI();
     }
 
     spawnEnemy() {
@@ -3418,10 +3074,14 @@ class GameScene extends Phaser.Scene {
         if (enemy.hp <= 0) {
             const killX = enemy.x;
             const killY = enemy.y;
+            const killedThrower = enemy.enemyType === 'thrower';
             enemy.destroy();
 
             this.registerEnemyKill();
             this.spawnXpPickup(killX, killY);
+            if (killedThrower) {
+                this.spawnHealingPickup(killX, killY);
+            }
 
             const rageGain = getRagePerKill(this);
             GameState.rage += rageGain;
@@ -3445,9 +3105,13 @@ class GameScene extends Phaser.Scene {
                         if (otherEnemy.hp <= 0) {
                             const explodeKillX = otherEnemy.x;
                             const explodeKillY = otherEnemy.y;
+                            const killedExplodeThrower = otherEnemy.enemyType === 'thrower';
                             otherEnemy.destroy();
                             this.registerEnemyKill();
                             this.spawnXpPickup(explodeKillX, explodeKillY);
+                            if (killedExplodeThrower) {
+                                this.spawnHealingPickup(explodeKillX, explodeKillY);
+                            }
                             GameState.rage += rageGain;
                             GameState.totalRage += rageGain;
                             GameState.runRageEarned += rageGain;
@@ -3475,7 +3139,6 @@ class GameScene extends Phaser.Scene {
         GameState.score += 10;
         GameState.enemiesKilledThisRun++;
         GameState.totalEnemiesKilled++;
-        GameState.runSouls++;
         this.enemiesKilledThisWave++;
     }
 
@@ -3614,6 +3277,7 @@ class GameScene extends Phaser.Scene {
         this.bobas?.clear(true, true);
         this.enemyProjectiles?.clear(true, true);
         this.xpPickups?.clear(true, true);
+        this.healingPickups?.clear(true, true);
         forceSceneTransition(this, targetKey, resetRun);
     }
 
@@ -3641,12 +3305,12 @@ class GameScene extends Phaser.Scene {
         this.bobas?.clear(true, true);
         this.enemyProjectiles?.clear(true, true);
         this.xpPickups?.clear(true, true);
+        this.healingPickups?.clear(true, true);
         SaveManager.save();
 
         this.scene.stop('PauseScene');
         this.scene.stop('UpgradeScene');
         this.scene.stop('FactoryScene');
-        this.scene.stop('CampaignMapScene');
         this.scene.pause('GameScene');
         this.scene.launch('GameOverScene');
     }
@@ -3736,19 +3400,11 @@ class GameScene extends Phaser.Scene {
         this.playerStateText.setText(GameState.aimMode === 'manual' ? 'MANUAL HOLD' : 'AUTO AIM');
         this.rageText.setText(`RAGE: ${Math.floor(GameState.rage)} (+${getRagePerKill(this)}/kill)`);
         this.tcText.setText(`TC: ${Math.floor(GameState.tc)} (+${getTcPerKill()}/kill)`);
-        this.outputText.setText(`THIS RUN: +${Math.floor(GameState.runTcEarned)} TC`);
+        this.outputText.setText(`RUN: +${Math.floor(GameState.runTcEarned)} TC  +${Math.floor(GameState.runTapiocaEarned)} TP`);
         const dashCooldown = this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt > 0
             ? ` ${Math.max(0, Math.ceil((this.nextDashRechargeAt - this.time.now) / 1000))}s`
             : '';
         this.dashText.setText(`DASH: ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
-
-        const soulProgress = getCampaignSoulProgress();
-        this.soulBarFill.width = 162 * soulProgress.pct;
-        this.soulText.setText(
-            soulProgress.souls >= soulProgress.target
-                ? `${getCampaignLocation().shortName} BOSS`
-                : `${getCampaignLocation().shortName} ${soulProgress.souls}/${soulProgress.target}`
-        );
 
         this.waveText.setText(`WAVE ${GameState.wave}`);
         this.scoreText.setText(`SCORE: ${GameState.score}`);
@@ -3794,92 +3450,42 @@ class UpgradeScene extends Phaser.Scene {
         this.input.keyboard.once('keydown-THREE', () => this.select(2));
     }
 
-    legacyCreateUpgradeCard(x, y, upgrade, index) {
-        const card = this.add.image(x, y, 'upgrade_card').setInteractive({ useHandCursor: true });
-
-        const imageKey = `upgrade-${upgrade.branch}`;
-        if (this.textures.exists(imageKey)) {
-            const art = this.add.image(x, y - 42, imageKey).setOrigin(0.5);
-            art.setDisplaySize(58, 58);
-        } else {
-            const iconSize = upgrade.icon.length > 4 ? '22px' : upgrade.icon.length > 2 ? '28px' : '40px';
-            this.add.text(x, y - 50, upgrade.icon, { fontSize: iconSize }).setOrigin(0.5);
-        }
-        const name = this.add.text(x, y + 10, upgrade.name, { fontSize: '18px', fill: '#fff' }).setOrigin(0.5);
-        const desc = this.add.text(x, y + 50, upgrade.desc, { fontSize: '12px', fill: '#aaa' }).setOrigin(0.5, 0.5).setWordWrapWidth(130);
-        const primaryTag = upgrade.branch || 'upgrade';
-        const readableTag = primaryTag.replace(/^./, ch => ch.toUpperCase());
-        const tagText = upgrade.requires
-            ? `SYNERGY • ${readableTag}`
-            : `PATH • ${readableTag}`;
-        const tag = this.add.text(x, y - 82, `${readableTag} - Tier ${upgrade.tier}`.toUpperCase(), {
-            fontSize: '10px',
-            fill: upgrade.tier >= 5 ? '#ffd700' : '#7ee0ff'
-        }).setOrigin(0.5);
-        const key = this.add.text(x, y + 85, `[${index + 1}]`, { fontSize: '14px', fill: '#666' }).setOrigin(0.5);
-
-        card.on('pointerover', () => {
-            card.setTexture('upgrade_card_sel');
-        });
-        card.on('pointerout', () => {
-            card.setTexture('upgrade_card');
-        });
-        card.on('pointerdown', () => {
-            this.select(this.cards.indexOf(card));
-        });
-
-        return card;
-    }
-
     createUpgradeCard(x, y, upgrade, index) {
         const theme = getUpgradeVisualTheme(upgrade);
         const accent = theme.accent;
-        const asset = getUpgradeCardAssetForUpgrade(upgrade);
-        const source = asset && this.textures.exists(asset.key)
-            ? this.textures.get(asset.key).getSourceImage()
-            : null;
-        const cardHeight = 270;
-        const cardWidth = source ? Math.round(cardHeight * (source.width / source.height)) : 164;
-        const glow = this.add.rectangle(x, y, cardWidth + 14, cardHeight + 14, theme.glow, 0.34)
-            .setStrokeStyle(2, accent, 0.82);
-        const art = asset && this.textures.exists(asset.key)
-            ? this.add.image(x, y, asset.key).setDisplaySize(cardWidth, cardHeight)
-            : null;
-        const card = (art || this.add.rectangle(x, y, 190, 255, BOBA_THEME.glass, 0.98)
-            .setStrokeStyle(2, accent))
+        const card = this.add.rectangle(x, y, 190, 255, BOBA_THEME.glass, 0.98)
+            .setStrokeStyle(2, accent)
             .setInteractive({ useHandCursor: true });
 
-        if (!art) {
-            const readableTag = (upgrade.branch || 'upgrade').replace(/^./, ch => ch.toUpperCase());
-            this.add.text(x, y - 106, `${readableTag} - Tier ${upgrade.tier}`.toUpperCase(), {
-                fontSize: '12px',
-                fill: upgrade.tier >= 5 ? '#ffd700' : '#7ee0ff',
-                fontFamily: 'Arial Black'
-            }).setOrigin(0.5);
+        const readableTag = (upgrade.branch || 'upgrade').replace(/^./, ch => ch.toUpperCase());
+        this.add.text(x, y - 106, `${readableTag} - Tier ${upgrade.tier}`.toUpperCase(), {
+            fontSize: '12px',
+            fill: upgrade.tier >= 5 ? '#ffd700' : '#7ee0ff',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
 
-            this.add.rectangle(x, y - 64, 78, 52, accent, 0.15).setStrokeStyle(2, accent);
-            const iconSize = upgrade.icon.length > 4 ? '18px' : upgrade.icon.length > 2 ? '23px' : '34px';
-            this.add.text(x, y - 64, upgrade.icon, {
-                fontSize: iconSize,
-                fill: '#fff7e6',
-                fontFamily: 'Arial Black'
-            }).setOrigin(0.5);
+        this.add.rectangle(x, y - 64, 78, 52, accent, 0.15).setStrokeStyle(2, accent);
+        const iconSize = upgrade.icon.length > 4 ? '18px' : upgrade.icon.length > 2 ? '23px' : '34px';
+        this.add.text(x, y - 64, upgrade.icon, {
+            fontSize: iconSize,
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
 
-            this.add.text(x, y + 2, upgrade.name, {
-                fontSize: '19px',
-                fill: '#fff7e6',
-                fontFamily: 'Arial Black',
-                align: 'center',
-                wordWrap: { width: 154 }
-            }).setOrigin(0.5);
+        this.add.text(x, y + 2, upgrade.name, {
+            fontSize: '19px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black',
+            align: 'center',
+            wordWrap: { width: 154 }
+        }).setOrigin(0.5);
 
-            this.add.text(x, y + 64, upgrade.desc, {
-                fontSize: '13px',
-                fill: '#c7d4ec',
-                align: 'center',
-                wordWrap: { width: 154 }
-            }).setOrigin(0.5);
-        }
+        this.add.text(x, y + 64, upgrade.desc, {
+            fontSize: '13px',
+            fill: '#c7d4ec',
+            align: 'center',
+            wordWrap: { width: 154 }
+        }).setOrigin(0.5);
 
         this.add.text(x, y + 112, `[${index + 1}]`, {
             fontSize: '14px',
@@ -3888,24 +3494,12 @@ class UpgradeScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(2);
 
         card.on('pointerover', () => {
-            glow.setFillStyle(theme.glow, 0.72);
-            glow.setStrokeStyle(3, BOBA_THEME.caramel, 1);
-            if (art) {
-                card.setDisplaySize(cardWidth + 8, cardHeight + 12);
-            } else {
-                card.setFillStyle(0x232c42, 0.98);
-                card.setStrokeStyle(3, BOBA_THEME.caramel);
-            }
+            card.setFillStyle(0x232c42, 0.98);
+            card.setStrokeStyle(3, BOBA_THEME.caramel);
         });
         card.on('pointerout', () => {
-            glow.setFillStyle(theme.glow, 0.34);
-            glow.setStrokeStyle(2, accent, 0.82);
-            if (art) {
-                card.setDisplaySize(cardWidth, cardHeight);
-            } else {
-                card.setFillStyle(BOBA_THEME.glass, 0.98);
-                card.setStrokeStyle(2, accent);
-            }
+            card.setFillStyle(BOBA_THEME.glass, 0.98);
+            card.setStrokeStyle(2, accent);
         });
         card.on('pointerdown', () => {
             this.select(this.cards.indexOf(card));
@@ -3996,11 +3590,7 @@ class GameOverScene extends Phaser.Scene {
             fontSize: '16px', fill: '#888'
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 462, `SOULS COLLECTED: ${GameState.runSouls} / ${getCampaignSoulTarget()} FOR ${getCampaignLocation().name.toUpperCase()}`, {
-            fontSize: '14px', fill: '#d9a6ff'
-        }).setOrigin(0.5);
-
-        this.add.text(GAME_CENTER_X, 486, `Lifetime Kills: ${GameState.totalEnemiesKilled}   |   Perma Pts: ${getAvailablePermaPoints()} / ${getTotalPermaPointsEarned()}`, {
+        this.add.text(GAME_CENTER_X, 470, `Lifetime Kills: ${GameState.totalEnemiesKilled}   |   Tapioca: ${Math.floor(GameState.tapioca)}`, {
             fontSize: '16px', fill: '#b8d8ff'
         }).setOrigin(0.5);
 
@@ -4318,7 +3908,7 @@ const config = {
     parent: 'game-root',
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scene: [BootScene, MenuScene, CampaignMapScene, IdleFactoryScene, PermaUpgradeScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
+    scene: [BootScene, MenuScene, IdleFactoryScene, PermaUpgradeScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
     input: {
         mouse: {
             preventDefaultWheel: false

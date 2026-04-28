@@ -22,6 +22,7 @@ function walk(dir) {
 
 const files = walk(assetsRoot)
     .filter(file => mimeByExt.has(path.extname(file).toLowerCase()))
+    .filter(file => !path.relative(root, file).split(path.sep).join('/').startsWith('assets/UpgradeCards/'))
     .sort((a, b) => a.localeCompare(b));
 
 const bundle = {};
