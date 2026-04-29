@@ -27,9 +27,9 @@ const DRINK_OPTIONS = [
         id: 'lychee',
         name: 'Lychee',
         desc: 'Light and sharp fruit build',
-        playerTexture: 'lychee_player',
-        playerScale: 0.11,
-        playerOrigin: { x: 0.516, y: 0.574 },
+        playerTexture: 'lychee_player_ui',
+        playerScale: 0.18,
+        playerOrigin: { x: 0.5, y: 0.5 },
         accent: 0xff5fa2
     }
 ];
@@ -323,21 +323,28 @@ const UPGRADES = [
     { id: 'bounce5', branch: 'bounce', tier: 5, name: 'Boba God', desc: 'Wall split can happen twice; first split keeps full damage', icon: 'B3', requires: ['bounce4'], apply: scene => { scene.wallSplitCount = 2; scene.wallFullDamageSplits = 1; } }
 ];
 
+// UI THEME: these read the CSS variables in index.html, so colors are easy to retheme.
+function cssThemeColor(name, fallback) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+    const match = raw.match(/^#?([0-9a-f]{6})$/i);
+    return match ? parseInt(match[1], 16) : parseInt(fallback.replace('#', ''), 16);
+}
+
 const BOBA_THEME = {
-    ink: 0x090b12,
+    ink: cssThemeColor('--boba-bg', '#070b14'),
     plum: 0x17111f,
-    glass: 0x141821,
-    glassDeep: 0x0d111a,
-    cream: 0xffe7b3,
+    glass: cssThemeColor('--boba-panel', '#101827'),
+    glassDeep: cssThemeColor('--boba-panel-deep', '#07111d'),
+    cream: cssThemeColor('--boba-cream', '#fff4d6'),
     white: 0xfff7e6,
-    muted: 0xb8afa3,
+    muted: cssThemeColor('--boba-muted', '#b8c9d8'),
     bobaBrown: 0x5a2d1d,
-    caramel: 0xf6b84b,
-    lychee: 0xff5fa2,
-    taro: 0xb36bff,
-    matcha: 0x7cff8a,
-    aqua: 0x38d9ff,
-    danger: 0xff3b4f
+    caramel: cssThemeColor('--boba-gold', '#ffd86f'),
+    lychee: cssThemeColor('--boba-pink', '#ff6fb0'),
+    taro: cssThemeColor('--boba-purple', '#c99af7'),
+    matcha: cssThemeColor('--boba-green', '#83f28f'),
+    aqua: cssThemeColor('--boba-aqua', '#58ddff'),
+    danger: cssThemeColor('--boba-danger', '#ff5368')
 };
 
 const BRANCH_VISUALS = {
@@ -684,22 +691,32 @@ function drawSceneBackdrop(scene, accentColor = 0x2b3357) {
 }
 
 function createPanel(scene, x, y, width, height, fill = BOBA_THEME.glass, stroke = BOBA_THEME.aqua, alpha = 0.96) {
+    scene.add.rectangle(x + 5, y + 7, width, height, 0x000000, 0.34);
+    scene.add.rectangle(x, y, width + 8, height + 8, stroke, 0.08);
     const panel = scene.add.rectangle(x, y, width, height, fill, alpha);
-    panel.setStrokeStyle(2, stroke);
+    panel.setStrokeStyle(2, stroke, 0.95);
+    scene.add.rectangle(x, y - height / 2 + 7, width - 18, 2, stroke, 0.6);
+    scene.add.rectangle(x, y + height / 2 - 7, width - 18, 2, stroke, 0.28);
+    const cornerSize = 9;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+        scene.add.rectangle(x + sx * (width / 2 - cornerSize), y + sy * (height / 2 - cornerSize), cornerSize, cornerSize, stroke, 0.86);
+    });
     return panel;
 }
 
 function createNeonPanel(scene, x, y, width, height, theme = BRANCH_VISUALS.boost, alpha = 0.94) {
-    scene.add.rectangle(x, y, width + 10, height + 10, theme.accent, 0.08);
-    scene.add.rectangle(x, y, width + 4, height + 4, theme.glow, 0.62);
+    scene.add.rectangle(x + 6, y + 8, width, height, 0x000000, 0.36);
+    scene.add.rectangle(x, y, width + 14, height + 14, theme.accent, 0.09);
+    scene.add.rectangle(x, y, width + 6, height + 6, theme.glow, 0.52);
     const panel = createPanel(scene, x, y, width, height, BOBA_THEME.glass, theme.accent, alpha);
-    scene.add.rectangle(x, y - (height / 2) + 8, width - 18, 2, theme.accent, 0.55);
-    scene.add.rectangle(x, y + (height / 2) - 8, width - 18, 2, theme.accent, 0.28);
+    scene.add.rectangle(x, y - (height / 2) + 18, width - 34, 1, BOBA_THEME.white, 0.22);
+    scene.add.rectangle(x - width / 2 + 12, y, 2, height - 32, theme.accent, 0.28);
     return panel;
 }
 
 function addFlavorBadge(scene, x, y, text, theme, width = 116) {
-    const badge = scene.add.rectangle(x, y, width, 20, theme.glow, 0.92).setStrokeStyle(1, theme.accent, 0.8);
+    const badge = scene.add.rectangle(x, y, width, 22, theme.glow, 0.95).setStrokeStyle(2, theme.accent, 0.9);
+    scene.add.rectangle(x, y - 8, width - 14, 1, BOBA_THEME.white, 0.34);
     const label = scene.add.text(x, y, text, {
         fontSize: '10px',
         fill: '#fff7e6',
@@ -790,6 +807,15 @@ function getImageSource(path) {
     if (globalThis.BOBA_EMBEDDED_ASSETS?.[path]) {
         return globalThis.BOBA_EMBEDDED_ASSETS[path];
     }
+    const movedAssetFallbacks = {
+        'assets/Player/Lychee Player.png': 'assets/Lychee Player.png',
+        'assets/Player/Lychee Shotgun.png': 'assets/Lychee Shotgun.png',
+        'assets/Player/Lychee Projectile.png': 'assets/Lychee Projectile.png'
+    };
+    const fallbackPath = movedAssetFallbacks[path];
+    if (fallbackPath && globalThis.BOBA_EMBEDDED_ASSETS?.[fallbackPath]) {
+        return globalThis.BOBA_EMBEDDED_ASSETS[fallbackPath];
+    }
     return path;
 }
 
@@ -808,9 +834,9 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'player_boba', path: 'assets/Player/player-boba.png' },
     { key: 'boba_gun', path: 'assets/Player/boba-gun.png' },
     { key: 'projectile_boba', path: 'assets/projectile-boba.png' },
-    { key: 'lychee_player', path: 'assets/Lychee Player.png' },
-    { key: 'lychee_shotgun', path: 'assets/Lychee Shotgun.png' },
-    { key: 'lychee_projectile', path: 'assets/Lychee Projectile.png' },
+    { key: 'lychee_player', path: 'assets/Player/Lychee Player.png' },
+    { key: 'lychee_shotgun', path: 'assets/Player/Lychee Shotgun.png' },
+    { key: 'lychee_projectile', path: 'assets/Player/Lychee Projectile.png' },
     { key: 'enemy_run_1', path: 'assets/Enemy/run-1.png' },
     { key: 'enemy_run_2', path: 'assets/Enemy/run-2.png' },
     { key: 'enemy_attack_1', path: 'assets/Enemy/attack-1.png' },
@@ -893,6 +919,7 @@ class BootScene extends Phaser.Scene {
     finishBoot() {
         // All file-based images are ready, now generate procedural textures
         this.createTextures();
+        this.createCroppedLycheeTexture();
         this.anims.create({
             key: 'enemy_run',
             frames: [
@@ -939,6 +966,18 @@ class BootScene extends Phaser.Scene {
         } else {
             this.scene.start('MenuScene');
         }
+    }
+
+    createCroppedLycheeTexture() {
+        if (this.textures.exists('lychee_player_ui') || !this.textures.exists('lychee_player')) return;
+        const source = this.textures.get('lychee_player').getSourceImage();
+        if (!source) return;
+        const crop = { x: 154, y: 150, width: 270, height: 330 };
+        const texture = this.textures.createCanvas('lychee_player_ui', crop.width, crop.height);
+        const context = texture.getContext();
+        context.clearRect(0, 0, crop.width, crop.height);
+        context.drawImage(source, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+        texture.refresh();
     }
 
     createFileModeFallbackImages() {
@@ -1081,21 +1120,33 @@ class BootScene extends Phaser.Scene {
 
         // Health bar segments
         const healthG = this.add.graphics();
-        healthG.fillStyle(BOBA_THEME.glassDeep);
-        healthG.fillRect(0, 0, 200, 20);
+        healthG.fillStyle(0x050914, 1);
+        healthG.fillRoundedRect(0, 0, 200, 20, 5);
+        healthG.lineStyle(2, BOBA_THEME.danger, 0.75);
+        healthG.strokeRoundedRect(1, 1, 198, 18, 5);
+        healthG.fillStyle(0xffffff, 0.12);
+        healthG.fillRect(8, 4, 184, 3);
         healthG.generateTexture('health_bg', 200, 20);
+        healthG.clear();
         healthG.fillStyle(BOBA_THEME.danger);
-        healthG.fillRect(0, 0, 200, 20);
+        healthG.fillRoundedRect(0, 0, 200, 20, 5);
+        healthG.fillStyle(0xffffff, 0.22);
+        healthG.fillRect(8, 4, 184, 3);
         healthG.generateTexture('health_fill', 200, 20);
         healthG.destroy();
 
         // XP bar
         const xpG = this.add.graphics();
-        xpG.fillStyle(BOBA_THEME.glassDeep);
-        xpG.fillRect(0, 0, 200, 12);
+        xpG.fillStyle(0x050914, 1);
+        xpG.fillRoundedRect(0, 0, 200, 12, 4);
+        xpG.lineStyle(1, BOBA_THEME.aqua, 0.72);
+        xpG.strokeRoundedRect(1, 1, 198, 10, 4);
         xpG.generateTexture('xp_bg', 200, 12);
+        xpG.clear();
         xpG.fillStyle(BOBA_THEME.aqua);
-        xpG.fillRect(0, 0, 200, 12);
+        xpG.fillRoundedRect(0, 0, 200, 12, 4);
+        xpG.fillStyle(0xffffff, 0.26);
+        xpG.fillRect(7, 2, 186, 2);
         xpG.generateTexture('xp_fill', 200, 12);
         xpG.destroy();
 
@@ -1173,7 +1224,7 @@ class MenuScene extends Phaser.Scene {
 
         this.createMenuBackdrop();
 
-        createPanel(this, 140, 126, 176, 168, 0x0a151f, 0x536784, 0.88);
+        createNeonPanel(this, 140, 126, 176, 168, BRANCH_VISUALS.speed, 0.9);
         this.tapiocaText = this.add.text(116, 74, '', { fontSize: '15px', fill: '#7ed2ff', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
         this.rageBankText = this.add.text(116, 122, '', { fontSize: '15px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
         this.killText = this.add.text(116, 170, '', { fontSize: '15px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
@@ -1184,12 +1235,12 @@ class MenuScene extends Phaser.Scene {
         this.add.rectangle(140, 146, 144, 1, 0x536784, 0.45);
 
         this.add.text(GAME_CENTER_X, 54, 'BOBA', {
-            fontSize: '58px', fill: '#fff4d6', fontFamily: 'Arial Black',
-            stroke: '#3a2c16', strokeThickness: 5
+            fontSize: '60px', fill: '#fff4d6', fontFamily: 'Arial Black',
+            stroke: '#7a4f15', strokeThickness: 5
         }).setOrigin(0.5);
         this.add.text(GAME_CENTER_X, 108, 'ROGUELIKE', {
-            fontSize: '46px', fill: '#78b650', fontFamily: 'Arial Black',
-            stroke: '#1d391f', strokeThickness: 5
+            fontSize: '46px', fill: '#83f28f', fontFamily: 'Arial Black',
+            stroke: '#143c28', strokeThickness: 5
         }).setOrigin(0.5);
         this.add.text(GAME_CENTER_X, 148, 'BUILD YOUR IDLE FACTORY, SURVIVE ENDLESS WAVES, AND GROW YOUR PERMANENT BUILD.', {
             fontSize: '12px', fill: '#c2c2b8', fontFamily: 'Courier New'
@@ -1199,19 +1250,19 @@ class MenuScene extends Phaser.Scene {
         this.makeTopIconButton(936, 86, 'Upgrades', () => this.scene.start('PermaUpgradeScene'));
         this.makeTopIconButton(1046, 86, 'Factory', () => this.scene.start('IdleFactoryScene'));
 
-        createPanel(this, 260, 414, 300, 378, 0x0d241e, 0x3a7a55, 0.92);
-        createPanel(this, 600, 414, 338, 378, 0x0b1722, 0x536784, 0.92);
-        createPanel(this, 940, 414, 300, 378, 0x111421, 0x685f8d, 0.92);
+        createNeonPanel(this, 260, 414, 300, 378, BRANCH_VISUALS.health, 0.93);
+        createNeonPanel(this, 600, 414, 338, 378, BRANCH_VISUALS.speed, 0.94);
+        createNeonPanel(this, 940, 414, 300, 378, BRANCH_VISUALS.pierce, 0.94);
 
         this.add.text(260, 246, 'FACTORY PREVIEW', {
             fontSize: '18px',
             fill: '#74c174',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
-        this.add.rectangle(260, 380, 236, 162, 0x07120f, 0.74).setStrokeStyle(2, 0x214c38);
-        this.add.circle(260, 404, 84, 0x42b765, 0.08);
+        this.add.rectangle(260, 380, 236, 162, 0x06140f, 0.82).setStrokeStyle(2, BOBA_THEME.matcha, 0.48);
+        this.add.circle(260, 404, 84, BOBA_THEME.matcha, 0.10).setStrokeStyle(2, BOBA_THEME.matcha, 0.20);
         this.charPreview = this.add.image(260, 374, 'player_boba').setScale(0.22);
-        createPanel(this, 260, 526, 236, 82, 0x0c1c17, 0x326449, 0.94);
+        createPanel(this, 260, 526, 236, 82, 0x0b2118, BOBA_THEME.matcha, 0.94);
         this.add.text(260, 526, 'Your idle factory keeps\nmaking tapioca during\nmenus and runs.', {
             fontSize: '13px',
             fill: '#cfe7c4',
@@ -1231,8 +1282,8 @@ class MenuScene extends Phaser.Scene {
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
         this.createBuildSelector();
-        this.runHintText = this.add.text(600, 596, 'Use the wheels to pick a drink body and gun.', {
-            fontSize: '13px',
+        this.runHintText = this.add.text(600, 610, 'Use the wheels to pick a drink body and gun.', {
+            fontSize: '12px',
             fill: '#c2cbda',
             align: 'center',
             lineSpacing: 4
@@ -1258,7 +1309,7 @@ class MenuScene extends Phaser.Scene {
             this.scene.start('IdleFactoryScene');
         }, 0xf0b14b, 0x442c0c, 200);
 
-        createPanel(this, GAME_CENTER_X, 728, 720, 46, 0x0b121b, 0x31445e, 0.94);
+        createNeonPanel(this, GAME_CENTER_X, 728, 720, 46, BRANCH_VISUALS.speed, 0.9);
         this.add.text(310, 728, 'VOLUME', { fontSize: '14px', fill: '#c2c2b8', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
         this.volumeSlider = this.add.rectangle(420, 728, 220, 8, 0x293449).setOrigin(0, 0.5);
         this.volumeFill = this.add.rectangle(420, 728, GameState.volume * 220, 8, 0x5bbcff).setOrigin(0, 0.5);
@@ -1310,7 +1361,10 @@ class MenuScene extends Phaser.Scene {
     }
 
     createMenuBackdrop() {
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x061018);
+        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x07111f);
+        this.add.circle(160, 120, 220, BOBA_THEME.aqua, 0.07);
+        this.add.circle(1040, 620, 260, BOBA_THEME.lychee, 0.06);
+        this.add.circle(560, 360, 280, BOBA_THEME.taro, 0.035);
         const skyline = this.add.graphics();
         const buildings = [
             [0, 380, 70, 240], [82, 310, 88, 310], [184, 350, 78, 270],
@@ -1318,39 +1372,48 @@ class MenuScene extends Phaser.Scene {
             [260, 392, 60, 230], [660, 390, 58, 230]
         ];
         buildings.forEach(([x, y, w, h], index) => {
-            skyline.fillStyle(index % 2 ? 0x0b1d24 : 0x0a171f, 0.9);
+            skyline.fillStyle(index % 2 ? 0x0d2630 : 0x0b1d29, 0.92);
             skyline.fillRect(x, y, w, h);
             skyline.lineStyle(1, 0x183345, 0.65);
             skyline.strokeRect(x, y, w, h);
             for (let wx = x + 12; wx < x + w - 10; wx += 20) {
                 for (let wy = y + 20; wy < y + h - 10; wy += 28) {
-                    skyline.fillStyle((wx + wy) % 3 === 0 ? 0xd69b39 : 0x1c754a, 0.35);
+                    skyline.fillStyle((wx + wy) % 3 === 0 ? BOBA_THEME.caramel : BOBA_THEME.matcha, 0.42);
                     skyline.fillRect(wx, wy, 6, 8);
                 }
             }
         });
-        skyline.lineStyle(2, 0x0d2c35, 0.7);
+        skyline.lineStyle(2, BOBA_THEME.aqua, 0.18);
         skyline.lineBetween(0, 610, GAME_WIDTH, 610);
         for (let x = 0; x < GAME_WIDTH; x += 40) {
-            skyline.lineStyle(1, 0x163442, 0.18);
+            skyline.lineStyle(1, BOBA_THEME.aqua, 0.13);
             skyline.lineBetween(x, 0, x, GAME_HEIGHT);
         }
         for (let y = 0; y < GAME_HEIGHT; y += 40) {
-            skyline.lineStyle(1, 0x163442, 0.18);
+            skyline.lineStyle(1, BOBA_THEME.aqua, 0.13);
             skyline.lineBetween(0, y, GAME_WIDTH, y);
         }
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.18);
-        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 1080, 680, 0x000000, 0x1e3549, 0.10);
+        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0.025);
+        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 1080, 680, 0x000000, BOBA_THEME.aqua, 0.08);
     }
 
     makeTopIconButton(x, y, text, callback) {
-        const btn = this.add.rectangle(x, y, 92, 38, 0x101c25, 0.92)
-            .setStrokeStyle(2, 0x385069)
+        const btn = this.add.rectangle(x, y, 92, 38, 0x132a3b, 0.94)
+            .setStrokeStyle(2, BOBA_THEME.aqua, 0.72)
             .setInteractive({ useHandCursor: true });
-        this.add.text(x, y, text, { fontSize: '11px', fill: '#d6e5e3', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        btn.on('pointerover', () => btn.setFillStyle(0x1a2a36, 0.94));
-        btn.on('pointerout', () => btn.setFillStyle(0x101c25, 0.92));
-        btn.on('pointerdown', callback);
+        const label = this.add.text(x, y, text, { fontSize: '11px', fill: '#e8fbff', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        btn.on('pointerover', () => {
+            btn.setFillStyle(0x1f4560, 0.98).setStrokeStyle(3, BOBA_THEME.caramel, 0.95);
+            label.setScale(1.04);
+        });
+        btn.on('pointerout', () => {
+            btn.setFillStyle(0x132a3b, 0.94).setStrokeStyle(2, BOBA_THEME.aqua, 0.72);
+            label.setScale(1);
+        });
+        btn.on('pointerdown', () => {
+            this.tweens.add({ targets: [btn, label], scaleX: 0.96, scaleY: 0.96, yoyo: true, duration: 60 });
+            callback();
+        });
         return btn;
     }
 
@@ -1375,7 +1438,7 @@ class MenuScene extends Phaser.Scene {
     makeBuildWheel(x, y, label, options, type) {
         this.add.text(x, y - 56, label, {
             fontSize: '12px',
-            fill: '#9fd7ff',
+            fill: '#baf4ff',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
 
@@ -1399,9 +1462,10 @@ class MenuScene extends Phaser.Scene {
             }).setOrigin(0.5)
         };
 
-        this.add.circle(x, y - 8, 54, 0x07121d, 0.9).setStrokeStyle(3, 0xffd700, 0.88);
-        this.add.circle(x - 104, y - 4, 34, 0x07121d, 0.74).setStrokeStyle(2, 0x385069, 0.82);
-        this.add.circle(x + 104, y - 4, 34, 0x07121d, 0.74).setStrokeStyle(2, 0x385069, 0.82);
+        this.add.circle(x, y - 8, 62, BOBA_THEME.caramel, 0.10).setStrokeStyle(4, BOBA_THEME.caramel, 0.9);
+        this.add.circle(x, y - 8, 50, 0x07121d, 0.9).setStrokeStyle(2, BOBA_THEME.aqua, 0.28);
+        this.add.circle(x - 104, y - 4, 38, 0x07121d, 0.76).setStrokeStyle(2, BOBA_THEME.aqua, 0.5);
+        this.add.circle(x + 104, y - 4, 38, 0x07121d, 0.76).setStrokeStyle(2, BOBA_THEME.aqua, 0.5);
         wheel.leftPreview.setDepth(2);
         wheel.centerPreview.setDepth(2);
         wheel.rightPreview.setDepth(2);
@@ -1419,8 +1483,18 @@ class MenuScene extends Phaser.Scene {
             fontFamily: 'Arial Black'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        prev.on('pointerdown', () => this.rotateBuildWheel(type, -1));
-        next.on('pointerdown', () => this.rotateBuildWheel(type, 1));
+        [prev, next].forEach(arrow => {
+            arrow.on('pointerover', () => arrow.setScale(1.14).setColor('#ffd86f'));
+            arrow.on('pointerout', () => arrow.setScale(1).setColor('#fff7e6'));
+        });
+        prev.on('pointerdown', () => {
+            this.tweens.add({ targets: prev, x: prev.x - 5, yoyo: true, duration: 55 });
+            this.rotateBuildWheel(type, -1);
+        });
+        next.on('pointerdown', () => {
+            this.tweens.add({ targets: next, x: next.x + 5, yoyo: true, duration: 55 });
+            this.rotateBuildWheel(type, 1);
+        });
         wheel.centerPreview.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.rotateBuildWheel(type, 1));
 
         return wheel;
@@ -1497,13 +1571,22 @@ class MenuScene extends Phaser.Scene {
     }
 
     makeSmallButton(x, y, text, callback) {
-        const btn = this.add.rectangle(x, y, 118, 30, 0x191c2f, 0.96)
-            .setStrokeStyle(2, 0x8d7bd8)
+        const btn = this.add.rectangle(x, y, 118, 30, 0x231b3b, 0.96)
+            .setStrokeStyle(2, BOBA_THEME.taro, 0.9)
             .setInteractive({ useHandCursor: true });
-        this.add.text(x, y, text, { fontSize: '11px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        btn.on('pointerover', () => btn.setFillStyle(0x272240, 0.98));
-        btn.on('pointerout', () => btn.setFillStyle(0x191c2f, 0.96));
-        btn.on('pointerdown', callback);
+        const label = this.add.text(x, y, text, { fontSize: '11px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        btn.on('pointerover', () => {
+            btn.setFillStyle(0x3a2b63, 0.98).setStrokeStyle(3, BOBA_THEME.caramel, 1);
+            label.setScale(1.04);
+        });
+        btn.on('pointerout', () => {
+            btn.setFillStyle(0x231b3b, 0.96).setStrokeStyle(2, BOBA_THEME.taro, 0.9);
+            label.setScale(1);
+        });
+        btn.on('pointerdown', () => {
+            this.tweens.add({ targets: [btn, label], scaleX: 0.95, scaleY: 0.95, yoyo: true, duration: 60 });
+            callback();
+        });
         return btn;
     }
 
@@ -1555,18 +1638,24 @@ class MenuScene extends Phaser.Scene {
     }
 
     makeButton(x, y, text, callback, accent = 0x7ed2ff, fill = 0x122438, width = 170) {
-        const btn = this.add.rectangle(x, y, width, 48, fill, 0.96)
-            .setStrokeStyle(3, accent)
+        const btn = this.add.rectangle(x, y, width, 48, fill, 0.98)
+            .setStrokeStyle(3, accent, 0.98)
             .setInteractive({ useHandCursor: true });
-        this.add.text(x, y, text, { fontSize: '15px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        this.add.rectangle(x, y - 17, width - 20, 2, 0xffffff, 0.18);
+        const label = this.add.text(x, y, text, { fontSize: '15px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0.5);
 
         btn.on('pointerover', () => {
-            btn.setFillStyle(fill + 0x080808, 0.98);
+            btn.setFillStyle(fill + 0x101010, 1).setStrokeStyle(4, BOBA_THEME.caramel, 1);
+            label.setScale(1.05);
         });
         btn.on('pointerout', () => {
-            btn.setFillStyle(fill, 0.96);
+            btn.setFillStyle(fill, 0.98).setStrokeStyle(3, accent, 0.98);
+            label.setScale(1);
         });
-        btn.on('pointerdown', callback);
+        btn.on('pointerdown', () => {
+            this.tweens.add({ targets: [btn, label], scaleX: 0.95, scaleY: 0.95, yoyo: true, duration: 70 });
+            callback();
+        });
 
         return btn;
     }
@@ -2244,10 +2333,12 @@ class GameScene extends Phaser.Scene {
         GameState.tc = 0;
 
         this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x1a1a2e);
+        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x07111f);
+        this.add.circle(160, 90, 230, BOBA_THEME.aqua, 0.055);
+        this.add.circle(1040, 720, 300, BOBA_THEME.lychee, 0.045);
 
         const grid = this.add.graphics();
-        grid.lineStyle(1, 0x2a2a4e, 0.3);
+        grid.lineStyle(1, BOBA_THEME.aqua, 0.16);
         for (let x = 0; x < GAME_WIDTH; x += 40) {
             grid.lineBetween(x, 0, x, GAME_HEIGHT);
         }
@@ -2385,6 +2476,13 @@ class GameScene extends Phaser.Scene {
             fill: '#ffd27a',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5).setDepth(6).setVisible(false);
+
+        [
+            this.bobaCountText, this.reloadText, this.playerStateText, this.rageText, this.tcText,
+            this.outputText, this.dashText, this.healthBarBg, this.healthBarFill, this.healthText,
+            this.xpBarBg, this.xpBarFill, this.xpText, this.waveText, this.scoreText,
+            this.levelText, this.factoryStatusText
+        ].forEach(node => node?.setDepth?.(5));
 
         this.updateBobaDisplay();
     }
@@ -3603,6 +3701,18 @@ class UpgradeScene extends Phaser.Scene {
         }
 
         this.cards = [];
+        this.add.text(GAME_CENTER_X, 142, 'PICK A BOBA MOD', {
+            fontSize: '34px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#4c2d5e',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+        this.add.text(GAME_CENTER_X, 178, 'Choose one upgrade to keep the run rolling.', {
+            fontSize: '13px',
+            fill: '#b8eaff',
+            fontFamily: 'Courier New'
+        }).setOrigin(0.5);
         this.chosenUpgrades.forEach((upgrade, i) => {
             const x = GAME_CENTER_X - 200 + i * 200;
             const card = this.createUpgradeCard(x, 396, upgrade, i);
@@ -3617,9 +3727,13 @@ class UpgradeScene extends Phaser.Scene {
     createUpgradeCard(x, y, upgrade, index) {
         const theme = getUpgradeVisualTheme(upgrade);
         const accent = theme.accent;
+        this.add.rectangle(x + 6, y + 8, 190, 255, 0x000000, 0.32);
+        this.add.rectangle(x, y, 202, 267, accent, 0.09);
         const card = this.add.rectangle(x, y, 190, 255, BOBA_THEME.glass, 0.98)
-            .setStrokeStyle(2, accent)
+            .setStrokeStyle(3, accent, 0.95)
             .setInteractive({ useHandCursor: true });
+        this.add.rectangle(x, y - 108, 160, 3, BOBA_THEME.white, 0.18);
+        this.add.rectangle(x, y + 108, 160, 2, accent, 0.34);
 
         const readableTag = (upgrade.branch || 'upgrade').replace(/^./, ch => ch.toUpperCase());
         this.add.text(x, y - 106, `${readableTag} - Tier ${upgrade.tier}`.toUpperCase(), {
@@ -3628,7 +3742,8 @@ class UpgradeScene extends Phaser.Scene {
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
 
-        this.add.rectangle(x, y - 64, 78, 52, accent, 0.15).setStrokeStyle(2, accent);
+        this.add.rectangle(x, y - 64, 82, 56, accent, 0.18).setStrokeStyle(2, accent, 0.9);
+        this.add.circle(x, y - 64, 34, accent, 0.08);
         const iconSize = upgrade.icon.length > 4 ? '18px' : upgrade.icon.length > 2 ? '23px' : '34px';
         this.add.text(x, y - 64, upgrade.icon, {
             fontSize: iconSize,
@@ -3659,11 +3774,13 @@ class UpgradeScene extends Phaser.Scene {
 
         card.on('pointerover', () => {
             card.setFillStyle(0x232c42, 0.98);
-            card.setStrokeStyle(3, BOBA_THEME.caramel);
+            card.setStrokeStyle(4, BOBA_THEME.caramel);
+            this.tweens.add({ targets: card, y: y - 4, duration: 90, ease: 'Quad.easeOut' });
         });
         card.on('pointerout', () => {
             card.setFillStyle(BOBA_THEME.glass, 0.98);
-            card.setStrokeStyle(2, accent);
+            card.setStrokeStyle(3, accent);
+            this.tweens.add({ targets: card, y, duration: 90, ease: 'Quad.easeOut' });
         });
         card.on('pointerdown', () => {
             this.select(this.cards.indexOf(card));
