@@ -142,6 +142,11 @@
             color: #151006 !important;
             background: #f6b84b !important;
         }
+        .auth-secondary {
+            border-color: #7ed2ff !important;
+            color: #dff4ff !important;
+            background: rgba(9, 20, 34, 0.92) !important;
+        }
         #auth-message {
             min-height: 20px;
             margin-top: 14px;
@@ -151,6 +156,10 @@
         }
         .auth-hidden {
             display: none !important;
+        }
+        .auth-panel[data-mode="session"] .auth-tabs,
+        .auth-panel[data-mode="session"] .auth-fields {
+            display: none;
         }
     </style>
 </head>
@@ -165,20 +174,23 @@
                 <button class="auth-tab" id="auth-login-tab" type="button" aria-selected="true">LOGIN</button>
                 <button class="auth-tab" id="auth-signup-tab" type="button" aria-selected="false">SIGN UP</button>
             </div>
-            <div id="auth-username-wrap" class="auth-hidden">
-                <label for="auth-username">USERNAME</label>
-                <input id="auth-username" name="username" autocomplete="username" minlength="3" maxlength="24">
-            </div>
-            <label for="auth-login">EMAIL OR USERNAME</label>
-            <input id="auth-login" name="login" autocomplete="email" required>
-            <label for="auth-password">PASSWORD</label>
-            <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="8" required>
-            <div class="auth-api-row">
-                <label for="auth-api-url">RENDER API URL</label>
-                <input id="auth-api-url" name="apiUrl" autocomplete="off" spellcheck="false">
+            <div class="auth-fields">
+                <div id="auth-username-wrap" class="auth-hidden">
+                    <label for="auth-username">USERNAME</label>
+                    <input id="auth-username" name="username" autocomplete="username" minlength="3" maxlength="24">
+                </div>
+                <label for="auth-login">EMAIL OR USERNAME</label>
+                <input id="auth-login" name="login" autocomplete="email" required>
+                <label for="auth-password">PASSWORD</label>
+                <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="8" required>
+                <div class="auth-api-row">
+                    <label for="auth-api-url">RENDER API URL</label>
+                    <input id="auth-api-url" name="apiUrl" autocomplete="off" spellcheck="false">
+                </div>
             </div>
             <div class="auth-actions">
                 <button class="auth-primary" id="auth-submit" type="submit">LOGIN</button>
+                <button class="auth-secondary auth-hidden" id="auth-switch" type="button">SWITCH ACCOUNT</button>
             </div>
             <div id="auth-message" role="status" aria-live="polite"></div>
         </form>

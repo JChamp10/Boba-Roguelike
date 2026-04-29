@@ -48,6 +48,10 @@
         }
     }
 
+    function displayName() {
+        return user?.username || user?.email || 'saved account';
+    }
+
     async function request(path, options = {}) {
         const { noAuth, ...fetchOptions } = options;
         const headers = {
@@ -125,14 +129,19 @@
 
     function setMode(mode) {
         const isSignup = mode === 'signup';
+        const isSession = mode === 'session';
         document.getElementById('auth-username-wrap')?.classList.toggle('auth-hidden', !isSignup);
-        document.getElementById('auth-login-tab')?.setAttribute('aria-selected', String(!isSignup));
+        document.getElementById('auth-login-tab')?.setAttribute('aria-selected', String(mode === 'login'));
         document.getElementById('auth-signup-tab')?.setAttribute('aria-selected', String(isSignup));
         const submit = document.getElementById('auth-submit');
+        const switchButton = document.getElementById('auth-switch');
         const loginInput = document.getElementById('auth-login');
         const passwordInput = document.getElementById('auth-password');
         const usernameInput = document.getElementById('auth-username');
-        if (submit) submit.textContent = isSignup ? 'CREATE ACCOUNT' : 'LOGIN';
+        if (submit) {
+            submit.textContent = isSession ? `CONTINUE AS ${displayName().toUpperCase()}` : (isSignup ? 'CREATE ACCOUNT' : 'LOGIN');
+        }
+        switchButton?.classList.toggle('auth-hidden', !isSession);
         if (loginInput) {
             loginInput.placeholder = isSignup ? 'email@example.com' : 'email or username';
             loginInput.autocomplete = isSignup ? 'email' : 'username';
@@ -177,9 +186,15 @@
         const loginTab = document.getElementById('auth-login-tab');
         const signupTab = document.getElementById('auth-signup-tab');
         const apiInput = document.getElementById('auth-api-url');
+        const switchButton = document.getElementById('auth-switch');
 
         loginTab?.addEventListener('click', () => setMode('login'));
         signupTab?.addEventListener('click', () => setMode('signup'));
+        switchButton?.addEventListener('click', () => {
+            writeAuth('', null);
+            setMessage('Signed out. Pick login or sign up.');
+            setMode('login');
+        });
         apiInput?.addEventListener('change', () => {
             setApiUrl(apiInput.value);
             setMessage(`Using API: ${apiUrl}`, true);
@@ -189,6 +204,13 @@
         form?.addEventListener('submit', async event => {
             event.preventDefault();
             const mode = form.getAttribute('data-mode') || 'login';
+            if (mode === 'session') {
+                setMessage('Loading your cloud save...', true);
+                await restoreCloudSave().catch(error => console.warn('Cloud restore failed', error));
+                hideGate();
+                onReady?.();
+                return;
+            }
             const login = document.getElementById('auth-login')?.value || '';
             const password = document.getElementById('auth-password')?.value || '';
             const username = document.getElementById('auth-username')?.value || '';
@@ -216,10 +238,9 @@
         });
 
         if (await verifyToken()) {
-            setStatus?.('SYNCING CLOUD SAVE...');
-            await restoreCloudSave().catch(error => console.warn('Cloud restore failed', error));
-            hideGate();
-            onReady?.();
+            setStatus?.('READY TO PLAY');
+            setMode('session');
+            setMessage(`Signed in as ${displayName()}. Continue when you're ready.`, true);
         }
     }
 
