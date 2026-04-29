@@ -186,14 +186,6 @@
         });
         setMode('login');
 
-        if (await verifyToken()) {
-            setStatus?.('SYNCING CLOUD SAVE...');
-            await restoreCloudSave().catch(error => console.warn('Cloud restore failed', error));
-            hideGate();
-            onReady?.();
-            return;
-        }
-
         form?.addEventListener('submit', async event => {
             event.preventDefault();
             const mode = form.getAttribute('data-mode') || 'login';
@@ -222,6 +214,13 @@
                 setMessage(error.message || 'Login failed');
             }
         });
+
+        if (await verifyToken()) {
+            setStatus?.('SYNCING CLOUD SAVE...');
+            await restoreCloudSave().catch(error => console.warn('Cloud restore failed', error));
+            hideGate();
+            onReady?.();
+        }
     }
 
     window.BobaAuth = {

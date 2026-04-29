@@ -29,6 +29,7 @@ const DRINK_OPTIONS = [
         desc: 'Light and sharp fruit build',
         playerTexture: 'lychee_player',
         playerScale: 0.11,
+        playerOrigin: { x: 0.516, y: 0.574 },
         accent: 0xff5fa2
     }
 ];
@@ -92,6 +93,7 @@ function getSelectedBuildProfile() {
         gunTexture: gun.gunTexture,
         projectileTexture: gun.projectileTexture,
         playerScale: drink.playerScale,
+        playerOrigin: drink.playerOrigin || { x: 0.5, y: 0.5 },
         gunScale: gun.gunScale,
         projectileScale: gun.projectileScale,
         projectileSpeed: gun.projectileSpeed,
@@ -1449,9 +1451,15 @@ class MenuScene extends Phaser.Scene {
         const textureProp = wheel.type === 'drink' ? 'playerTexture' : 'gunTexture';
         const scaleProp = wheel.type === 'drink' ? 'playerScale' : 'gunScale';
         const baseScale = wheel.type === 'drink' ? 1.35 : 1.22;
-        wheel.leftPreview.setTexture(prev[textureProp]).setScale(prev[scaleProp] * baseScale).setAlpha(0.36);
-        wheel.centerPreview.setTexture(current[textureProp]).setScale(current[scaleProp] * (baseScale + 0.28)).setAlpha(1);
-        wheel.rightPreview.setTexture(next[textureProp]).setScale(next[scaleProp] * baseScale).setAlpha(0.36);
+        const applyPreview = (image, option, scale, alpha) => {
+            const origin = wheel.type === 'drink'
+                ? (option.playerOrigin || { x: 0.5, y: 0.5 })
+                : { x: 0.5, y: 0.5 };
+            image.setTexture(option[textureProp]).setOrigin(origin.x, origin.y).setScale(option[scaleProp] * scale).setAlpha(alpha);
+        };
+        applyPreview(wheel.leftPreview, prev, baseScale, 0.36);
+        applyPreview(wheel.centerPreview, current, baseScale + 0.28, 1);
+        applyPreview(wheel.rightPreview, next, baseScale, 0.36);
         wheel.nameText.setText(current.name.toUpperCase());
         wheel.descText.setText(current.desc);
     }
@@ -1541,7 +1549,8 @@ class MenuScene extends Phaser.Scene {
         this.updateWheelPreview(this.gunWheel);
         this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
         if (this.charPreview) {
-            this.charPreview.setTexture(drink.playerTexture).setScale(drink.playerScale * 1.72);
+            const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
+            this.charPreview.setTexture(drink.playerTexture).setOrigin(drinkOrigin.x, drinkOrigin.y).setScale(drink.playerScale * 1.72);
         }
     }
 
@@ -2324,7 +2333,8 @@ class GameScene extends Phaser.Scene {
 
     createPlayer() {
         this.player = this.physics.add.sprite(GAME_CENTER_X, GAME_HEIGHT - 180, this.playerTextureKey || 'player_boba');
-        this.player.setOrigin(0.5);
+        const playerOrigin = this.weaponProfile?.playerOrigin || { x: 0.5, y: 0.5 };
+        this.player.setOrigin(playerOrigin.x, playerOrigin.y);
         this.player.setScale(this.weaponProfile?.playerScale || 0.14);
         this.player.setCollideWorldBounds(true);
         this.gunPivotOffset = { x: 0, y: -12 };
