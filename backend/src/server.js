@@ -25,6 +25,14 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 
+app.get('/', (req, res) => {
+    res.json({
+        ok: true,
+        service: 'boba-roguelike-api',
+        databaseConfigured: db.isConfigured()
+    });
+});
+
 function normalizeEmail(email) {
     return String(email || '').trim().toLowerCase();
 }
@@ -44,8 +52,15 @@ function publicUser(row) {
 
 app.get('/health', async (req, res, next) => {
     try {
+        if (!db.isConfigured()) {
+            return res.status(503).json({
+                ok: false,
+                databaseConfigured: false,
+                error: 'DATABASE_URL is not configured'
+            });
+        }
         await db.query('select 1');
-        res.json({ ok: true });
+        res.json({ ok: true, databaseConfigured: true });
     } catch (error) {
         next(error);
     }

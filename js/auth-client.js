@@ -5,7 +5,11 @@
     const SAVE_KEY = 'boba_roguelike_save';
     const DEFAULT_API_URL = 'https://boba-roguelike.onrender.com';
 
-    let apiUrl = cleanApiUrl(localStorage.getItem(API_KEY) || window.BOBA_API_URL || DEFAULT_API_URL);
+    let apiUrl = cleanApiUrl(window.BOBA_API_URL || localStorage.getItem(API_KEY) || DEFAULT_API_URL);
+    if (apiUrl.includes('boba-roguelike-api.onrender.com')) {
+        apiUrl = DEFAULT_API_URL;
+        localStorage.setItem(API_KEY, apiUrl);
+    }
     let token = localStorage.getItem(TOKEN_KEY) || '';
     let user = readJson(localStorage.getItem(USER_KEY));
     let saveUploadTimer = null;
@@ -61,7 +65,7 @@
                 headers
             });
         } catch (error) {
-            throw new Error(`Cannot reach backend at ${apiUrl}. Check your Render URL and deploy logs.`);
+            throw new Error(`Cannot reach backend at ${apiUrl}. Open ${apiUrl}/health and check Render deploy logs.`);
         }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
