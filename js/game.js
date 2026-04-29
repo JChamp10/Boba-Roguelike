@@ -12,6 +12,7 @@ const XP_ORB_MAX_SPEED = 820;
 const XP_ORB_PLAYER_SPEED_BONUS = 120;
 const IDLE_RUN_TAPIOCA_TICK_MS = 1000;
 const PER_RUN_DAMAGE_BOOST_PERCENT = 0.10;
+const LYCHEE_PROJECTILE_LIFESPAN_MS = 1200;
 
 const DRINK_OPTIONS = [
     {
@@ -57,6 +58,7 @@ const GUN_OPTIONS = [
         gunScale: 0.0825,
         projectileScale: 0.035,
         projectileSpeed: 540,
+        projectileLifespan: LYCHEE_PROJECTILE_LIFESPAN_MS,
         projectileCount: 4,
         spread: 0.62,
         damageMultiplier: 0.3,
@@ -93,6 +95,7 @@ function getSelectedBuildProfile() {
         gunScale: gun.gunScale,
         projectileScale: gun.projectileScale,
         projectileSpeed: gun.projectileSpeed,
+        projectileLifespan: gun.projectileLifespan || 2400,
         projectileCount: gun.projectileCount,
         spread: gun.spread,
         damageMultiplier: gun.damageMultiplier,
@@ -291,6 +294,11 @@ const UPGRADES = [
     { id: 'speed3', branch: 'speed', tier: 3, name: 'Sugar Fiend', desc: '+30% speed', icon: 'SPD', requires: ['speed2'], apply: scene => { scene.playerSpeed *= 1.30; } },
     { id: 'speed4', branch: 'speed', tier: 4, name: 'High on Boba', desc: '+20% speed. Speed bonus also boosts damage.', icon: 'SPD', requires: ['speed3'], apply: scene => { scene.playerSpeed *= 1.20; scene.applySpeedDamageBonus(); } },
     { id: 'speed5', branch: 'speed', tier: 5, name: 'Boba God', desc: 'XP gives +100% speed for 3 seconds', icon: 'XP', requires: ['speed4'], apply: scene => { scene.xpSpeedBoostEnabled = true; } },
+    { id: 'attack1', branch: 'attack', tier: 1, name: 'Quick Straw', desc: '+25% attack speed', icon: 'AS', apply: scene => { scene.applyAttackSpeedBoost(0.25); } },
+    { id: 'attack2', branch: 'attack', tier: 2, name: 'Faster Sips', desc: '+35% attack speed', icon: 'AS+', requires: ['attack1'], apply: scene => { scene.applyAttackSpeedBoost(0.35); } },
+    { id: 'attack3', branch: 'attack', tier: 3, name: 'Last Pearl Sting', desc: '+50% attack speed. Last ammo deals double damage.', icon: '1x2', requires: ['attack2'], apply: scene => { scene.applyAttackSpeedBoost(0.50); scene.lastAmmoDoubleCount = Math.max(scene.lastAmmoDoubleCount || 0, 1); } },
+    { id: 'attack4', branch: 'attack', tier: 4, name: 'Final Two Sting', desc: '+80% attack speed. Last two ammo deal double damage.', icon: '2x2', requires: ['attack3'], apply: scene => { scene.applyAttackSpeedBoost(0.80); scene.lastAmmoDoubleCount = Math.max(scene.lastAmmoDoubleCount || 0, 2); } },
+    { id: 'attack5', branch: 'attack', tier: 5, name: 'Combo Straw', desc: 'Each ammo deals double the last shot damage.', icon: '2^N', requires: ['attack4'], apply: scene => { scene.ammoDamageRamp = true; } },
     { id: 'damage1', branch: 'damage', tier: 1, name: 'Big Boba', desc: '+25% damage, +50% boba size', icon: 'DMG', apply: scene => { scene.playerDamage *= 1.25; scene.projectileScale *= 1.50; } },
     { id: 'damage2', branch: 'damage', tier: 2, name: 'Huge Tapioca', desc: '+30% damage', icon: 'DMG', requires: ['damage1'], apply: scene => { scene.playerDamage *= 1.30; } },
     { id: 'damage3', branch: 'damage', tier: 3, name: 'Towering Tapioca', desc: '+20% damage, +100% boba size', icon: 'DMG', requires: ['damage2'], apply: scene => { scene.playerDamage *= 1.20; scene.projectileScale *= 2; } },
@@ -333,6 +341,7 @@ const BOBA_THEME = {
 const BRANCH_VISUALS = {
     damage: { accent: BOBA_THEME.lychee, glow: 0x4a1026, label: 'LYCHEE IMPACT' },
     speed: { accent: BOBA_THEME.aqua, glow: 0x063746, label: 'SUGAR RUSH' },
+    attack: { accent: BOBA_THEME.aqua, glow: 0x0d3144, label: 'TAPIOCA TEMPO' },
     health: { accent: BOBA_THEME.matcha, glow: 0x123a20, label: 'MATCHA GUARD' },
     pierce: { accent: BOBA_THEME.taro, glow: 0x2b1543, label: 'TARO STRAW' },
     bounce: { accent: BOBA_THEME.caramel, glow: 0x422d08, label: 'CARAMEL RICOCHET' },
@@ -1162,15 +1171,15 @@ class MenuScene extends Phaser.Scene {
 
         this.createMenuBackdrop();
 
-        createPanel(this, 106, 126, 176, 168, 0x0a151f, 0x536784, 0.88);
-        this.tapiocaText = this.add.text(82, 74, '', { fontSize: '15px', fill: '#7ed2ff', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.rageBankText = this.add.text(82, 122, '', { fontSize: '15px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.killText = this.add.text(82, 170, '', { fontSize: '15px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.add.image(54, 74, 'player_boba').setScale(0.045);
-        this.add.text(54, 122, 'R', { fontSize: '22px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.add.text(54, 170, 'K', { fontSize: '22px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.add.rectangle(106, 98, 144, 1, 0x536784, 0.45);
-        this.add.rectangle(106, 146, 144, 1, 0x536784, 0.45);
+        createPanel(this, 140, 126, 176, 168, 0x0a151f, 0x536784, 0.88);
+        this.tapiocaText = this.add.text(116, 74, '', { fontSize: '15px', fill: '#7ed2ff', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.rageBankText = this.add.text(116, 122, '', { fontSize: '15px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.killText = this.add.text(116, 170, '', { fontSize: '15px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.add.image(88, 74, 'player_boba').setScale(0.045);
+        this.add.text(88, 122, 'R', { fontSize: '22px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        this.add.text(88, 170, 'K', { fontSize: '22px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        this.add.rectangle(140, 98, 144, 1, 0x536784, 0.45);
+        this.add.rectangle(140, 146, 144, 1, 0x536784, 0.45);
 
         this.add.text(GAME_CENTER_X, 54, 'BOBA', {
             fontSize: '58px', fill: '#fff4d6', fontFamily: 'Arial Black',
@@ -1329,7 +1338,7 @@ class MenuScene extends Phaser.Scene {
             skyline.lineBetween(0, y, GAME_WIDTH, y);
         }
         this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.18);
-        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 980, 680, 0x000000, 0x1e3549, 0.10);
+        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 1080, 680, 0x000000, 0x1e3549, 0.10);
     }
 
     makeTopIconButton(x, y, text, callback) {
@@ -2052,10 +2061,11 @@ class PauseScene extends Phaser.Scene {
             wordWrap: { width: 500 }
         }).setOrigin(0.5).setDepth(30).setVisible(false);
 
-        const branches = ['shot', 'speed', 'damage', 'health', 'pierce', 'bounce'];
+        const branches = ['shot', 'speed', 'attack', 'damage', 'health', 'pierce', 'bounce'];
         const labels = {
             shot: 'Shots',
             speed: 'Speed',
+            attack: 'Attack',
             damage: 'Damage',
             health: 'Health',
             pierce: 'Pierce',
@@ -2066,7 +2076,7 @@ class PauseScene extends Phaser.Scene {
             const branchUpgrades = UPGRADES
                 .filter(upgrade => upgrade.branch === branch)
                 .sort((a, b) => a.tier - b.tier);
-            const y = 220 + (branchIndex * 66);
+            const y = 212 + (branchIndex * 58);
             const owned = branchUpgrades.filter(upgrade => hasUpgrade(upgrade.id));
             const highestOwned = owned[owned.length - 1];
 
@@ -2156,6 +2166,7 @@ class GameScene extends Phaser.Scene {
         this.projectilePierce = 0;
         this.projectileSpeed = this.weaponProfile.projectileSpeed || 500;
         this.projectileScale = this.weaponProfile.projectileScale || 0.18;
+        this.projectileLifespan = this.weaponProfile.projectileLifespan || 2400;
         this.playerDamage *= this.weaponProfile.damageMultiplier || 1;
         this.basePlayerDamage *= this.weaponProfile.damageMultiplier || 1;
         this.playerFireRate *= this.weaponProfile.fireRateMultiplier || 1;
@@ -2167,6 +2178,8 @@ class GameScene extends Phaser.Scene {
         this.wallFullDamageSplits = 0;
         this.splitOnKill = false;
         this.growingBoba = false;
+        this.lastAmmoDoubleCount = 0;
+        this.ammoDamageRamp = false;
         this.xpSpeedBoostEnabled = false;
         this.xpSpeedBoostUntil = 0;
         this.damageReductionPercent = 0;
@@ -2599,6 +2612,18 @@ class GameScene extends Phaser.Scene {
         this.playerDamage *= 1 + (speedBonus * 0.1);
     }
 
+    applyAttackSpeedBoost(percent) {
+        this.playerFireRate = Math.max(60, this.playerFireRate / (1 + percent));
+    }
+
+    getAmmoDamageMultiplier() {
+        if (this.ammoDamageRamp) {
+            const shotsFiredFromClip = Math.max(0, this.maxBobaCount - this.bobaCount);
+            return Math.pow(2, shotsFiredFromClip);
+        }
+        return this.bobaCount <= (this.lastAmmoDoubleCount || 0) ? 2 : 1;
+    }
+
     triggerXpPickupBoost() {
         if (!this.xpSpeedBoostEnabled) return;
         this.xpSpeedBoostUntil = this.time.now + 3000;
@@ -2934,7 +2959,7 @@ class GameScene extends Phaser.Scene {
         let fired = false;
         const projectileCount = Math.max(1, this.multiShot || 1);
         const spread = this.weaponProfile?.spread || 0.4;
-        const projectileDamage = this.playerDamage;
+        const projectileDamage = this.playerDamage * this.getAmmoDamageMultiplier();
 
         // Fire shotgun/multishot pearls evenly from the same gun muzzle point.
         if (projectileCount === 1) {
@@ -3012,7 +3037,8 @@ class GameScene extends Phaser.Scene {
                 boba.hasBounced = true;
             }
         });
-        this.time.delayedCall(source === 'gun' ? 2400 : 1800, () => {
+        const lifespan = source === 'gun' ? this.projectileLifespan : 1800;
+        this.time.delayedCall(lifespan, () => {
             if (boba.active) {
                 boba.destroy();
             }
