@@ -1,5 +1,6 @@
 (function () {
-    const USERNAME_KEY = 'boba_player_username';
+    const USERNAME_KEY = 'boba_player_username_device';
+    const LEGACY_USERNAME_KEY = 'boba_player_username';
     const API_KEY = 'boba_api_url';
     const SAVE_KEY = 'boba_roguelike_save';
     const LOCAL_LEADERBOARD_KEY = 'boba_local_leaderboard';
@@ -24,7 +25,15 @@
     }
 
     function getUsername() {
-        return sanitizeUsername(localStorage.getItem(USERNAME_KEY) || 'Player');
+        const saved = localStorage.getItem(USERNAME_KEY);
+        if (saved) return sanitizeUsername(saved);
+        const legacy = sanitizeUsername(localStorage.getItem(LEGACY_USERNAME_KEY) || '');
+        if (legacy) {
+            localStorage.setItem(USERNAME_KEY, legacy);
+            localStorage.removeItem(LEGACY_USERNAME_KEY);
+            return legacy;
+        }
+        return 'Player';
     }
 
     function setUsername(value) {
@@ -171,7 +180,7 @@
             throw new Error('That save code is not valid.');
         }
         localStorage.setItem(SAVE_KEY, JSON.stringify(payload.save));
-        if (payload.username) setUsername(payload.username);
+        syncUsernameInput();
     }
 
     function syncUsernameInput() {

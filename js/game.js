@@ -11,7 +11,7 @@ const XP_ORB_MIN_SPEED = 340;
 const XP_ORB_MAX_SPEED = 820;
 const XP_ORB_PLAYER_SPEED_BONUS = 120;
 const IDLE_RUN_TAPIOCA_TICK_MS = 1000;
-const PER_RUN_DAMAGE_BOOST_PERCENT = 0.10;
+const PER_RUN_DAMAGE_BOOST_PERCENT = 0.05;
 const LYCHEE_PROJECTILE_LIFESPAN_MS = 1200;
 const BUILD_ABILITY_DURATION_MS = 4200;
 
@@ -95,7 +95,7 @@ const GUN_OPTIONS = [
         gunScale: 0.17,
         projectileScale: 0.16,
         projectileSpeed: 500,
-        projectileLifespan: 850,
+        projectileLifespan: 320,
         projectileCount: 6,
         spread: 0.95,
         damageMultiplier: 0.42,
@@ -118,6 +118,7 @@ const GUN_OPTIONS = [
         spread: 0.15,
         damageMultiplier: 0.55,
         fireRateMultiplier: 2.1,
+        reloadDurationMultiplier: 3,
         weaponType: 'matchaOrb',
         synergy: 'Poison damage steals life; SPACE doubles orb duration.',
         accent: 0x83f28f
@@ -177,6 +178,7 @@ function getSelectedBuildProfile() {
     sanitizeBuildState();
     const drink = getDrinkOption();
     const gun = getGunOption();
+    const synergy = getBuildSynergyText(drink, gun);
     return {
         id: `${drink.id}-${gun.id}`,
         drink,
@@ -195,10 +197,21 @@ function getSelectedBuildProfile() {
         spread: gun.spread,
         damageMultiplier: gun.damageMultiplier,
         fireRateMultiplier: gun.fireRateMultiplier,
+        reloadDurationMultiplier: gun.reloadDurationMultiplier || 1,
         weaponType: gun.weaponType || 'classic',
         abilityType: drink.abilityType || 'classicDash',
-        synergy: gun.synergy || ''
+        synergy
     };
+}
+
+function doesBuildHaveSynergy(drink = getDrinkOption(), gun = getGunOption()) {
+    if (!drink?.id || !gun?.id) return false;
+    if (drink.id === 'classic' && gun.id === 'classic') return true;
+    return gun.id.startsWith(`${drink.id}-`);
+}
+
+function getBuildSynergyText(drink = getDrinkOption(), gun = getGunOption()) {
+    return doesBuildHaveSynergy(drink, gun) ? (gun.synergy || '') : '';
 }
 
 // ============================================
@@ -365,9 +378,9 @@ const PERMA_UPGRADES = [
     { id: 'menuReload', branch: 'Small Boosts', name: 'Reload Speed', desc: '+1% reload speed per level', icon: 'RLD', baseCost: 1000, costScale: 1.10, maxLevel: 999, effectText: '+1% reload speed', apply: scene => { scene.permaReloadSpeedBonus += 0.01; } },
     { id: 'menuHealth', branch: 'Small Boosts', name: 'Health', desc: '+1 max HP per level', icon: 'HP', baseCost: 5000, costScale: 1.30, maxLevel: 999, effectText: '+1 max HP', apply: () => { GameState.maxHealth += 1; } },
     { id: 'menuAmmo', branch: 'Small Boosts', name: 'Ammo Capacity', desc: '+1 max boba ammo per level', icon: 'AMMO', baseCost: 100000, costScale: 1.25, maxLevel: 999, effectText: '+1 max ammo', apply: scene => { scene.permaMaxAmmoBonus += 1; } },
-    { id: 'menuRageBonus', branch: 'Per-Run Boosts', name: 'Rage Bonus', desc: '+2% rage gained per level', icon: 'RAGE', baseCost: 10000, costScale: 1.10, maxLevel: 999, effectText: '+2% rage', apply: scene => { scene.permaRageBonusPercent += 0.02; } },
-    { id: 'menuRunDamage', branch: 'Per-Run Boosts', name: 'Damage Bonus', desc: '+10% run damage per level', icon: 'DMG+', baseCost: 10000, costScale: 1.25, maxLevel: 999, effectText: '+10% damage', apply: scene => { scene.playerDamage += scene.basePlayerDamage * PER_RUN_DAMAGE_BOOST_PERCENT; } },
-    { id: 'menuXpBonus', branch: 'Per-Run Boosts', name: 'XP Bonus', desc: '+5% XP gained per level', icon: 'XP', baseCost: 20000, costScale: 1.10, maxLevel: 999, effectText: '+5% XP', apply: scene => { scene.permaXpBonusPercent += 0.05; } }
+    { id: 'menuRageBonus', branch: 'Per-Run Boosts', name: 'Rage Bonus', desc: '+2% rage gained per level', icon: 'RAGE', baseCost: 10000, costScale: 1, maxLevel: 999, effectText: '+2% rage', apply: scene => { scene.permaRageBonusPercent += 0.02; } },
+    { id: 'menuRunDamage', branch: 'Per-Run Boosts', name: 'Damage Bonus', desc: '+5% run damage per level', icon: 'DMG+', baseCost: 10000, costScale: 1, maxLevel: 999, effectText: '+5% damage', apply: scene => { scene.playerDamage += scene.basePlayerDamage * PER_RUN_DAMAGE_BOOST_PERCENT; } },
+    { id: 'menuXpBonus', branch: 'Per-Run Boosts', name: 'XP Bonus', desc: '+5% XP gained per level', icon: 'XP', baseCost: 20000, costScale: 1, maxLevel: 999, effectText: '+5% XP', apply: scene => { scene.permaXpBonusPercent += 0.05; } }
 ];
 
 const TEMPORARY_PER_RUN_UPGRADE_IDS = new Set(
@@ -640,7 +653,7 @@ function getPermaUpgradeLevel(id) {
 function getPermaUpgradeCost(upgrade) {
     const level = getPermaUpgradeLevel(upgrade.id);
     const baseCost = upgrade.baseCost || 0;
-    const costScale = upgrade.costScale || 1;
+    const costScale = isTemporaryPerRunUpgrade(upgrade.id) ? 1 : (upgrade.costScale || 1);
     const discount = 1 - getQuantumCostReduction();
     return Math.max(1, Math.floor(baseCost * Math.pow(costScale, level) * discount));
 }
@@ -781,6 +794,13 @@ function hardSwitchScene(scene, targetKey) {
 
     scenePlugin.start(targetKey);
     scene.cleanSceneStartPending = false;
+}
+
+function startFreshRunFromMenu(scene) {
+    sanitizeBuildState();
+    GameState.reset();
+    GameState.selectedCharacter = Math.max(0, DRINK_OPTIONS.findIndex(option => option.id === GameState.selectedDrink));
+    hardSwitchScene(scene, 'GameScene');
 }
 
 function drawSceneBackdrop(scene, accentColor = 0x2b3357) {
@@ -1445,11 +1465,7 @@ class MenuScene extends Phaser.Scene {
 
         this.createLeaderboardPanel(940, 414);
 
-        this.makeButton(210, 660, 'START GAME', () => {
-            GameState.reset();
-            GameState.selectedCharacter = Math.max(0, DRINK_OPTIONS.findIndex(option => option.id === GameState.selectedDrink));
-            this.scene.start('GameScene');
-        }, 0x66c878, 0x153a20, 180);
+        this.makeButton(210, 660, 'START GAME', () => startFreshRunFromMenu(this), 0x66c878, 0x153a20, 180);
 
         this.makeButton(420, 660, 'UPGRADES', () => {
             this.scene.start('PermaUpgradeScene');
@@ -1790,7 +1806,7 @@ class MenuScene extends Phaser.Scene {
         this.updateWheelPreview(this.drinkWheel);
         this.updateWheelPreview(this.gunWheel);
         this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
-        this.runHintText?.setText(gun.synergy || 'Use the wheels to pick a character and weapon.');
+        this.runHintText?.setText(getBuildSynergyText(drink, gun) || 'Open character select to match a boba and weapon for a synergy.');
         if (this.buildCharacterPreview) {
             const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
             this.buildCharacterPreview
@@ -1896,7 +1912,7 @@ class BuildSelectScene extends Phaser.Scene {
         this.drinkWheel = this.makeBuildWheel(600, 336, 'CHARACTER', DRINK_OPTIONS, 'drink');
         this.gunWheel = this.makeBuildWheel(600, 552, 'WEAPON', GUN_OPTIONS, 'gun');
 
-        this.add.text(998, 206, 'SYNERGY', {
+        this.synergyTitleText = this.add.text(998, 206, 'SYNERGY', {
             fontSize: '18px',
             fill: '#d9c8ff',
             fontFamily: 'Arial Black'
@@ -1917,11 +1933,7 @@ class BuildSelectScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         this.makeButton(430, 724, 'BACK', () => this.scene.start('MenuScene'), 0x9fb3d9, 0x222a38, 170);
-        this.makeButton(600, 724, 'START GAME', () => {
-            GameState.reset();
-            GameState.selectedCharacter = Math.max(0, DRINK_OPTIONS.findIndex(option => option.id === GameState.selectedDrink));
-            this.scene.start('GameScene');
-        }, 0x66c878, 0x153a20, 180);
+        this.makeButton(600, 724, 'START GAME', () => startFreshRunFromMenu(this), 0x66c878, 0x153a20, 180);
         this.makeButton(790, 724, 'UPGRADES', () => this.scene.start('PermaUpgradeScene'), 0x5db8e8, 0x102f42, 170);
 
         this.updateDisplays();
@@ -1956,7 +1968,11 @@ class BuildSelectScene extends Phaser.Scene {
         this.updateWheelPreview(this.drinkWheel);
         this.updateWheelPreview(this.gunWheel);
         this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
-        this.runHintText.setText(gun.synergy || 'Use the wheels to pick a character and weapon.');
+        const synergy = getBuildSynergyText(drink, gun);
+        this.synergyTitleText?.setVisible(!!synergy);
+        this.runHintText
+            .setVisible(!!synergy)
+            .setText(synergy);
         this.abilityText.setText(`SPACE ABILITY\n${drink.desc}`);
         this.statsText.setText(`SPEED ${char.speed}\nDAMAGE ${char.damage}\nFIRE RATE ${char.fireRate}ms\n${char.desc}`);
 
@@ -2776,9 +2792,11 @@ class GameScene extends Phaser.Scene {
         this.bobaCount = this.maxBobaCount;
         this.isReloading = false;
         this.reloadDuration = Math.max(250, Math.floor(1000 / (1 + this.permaReloadSpeedBonus)));
+        this.reloadDuration *= this.weaponProfile?.reloadDurationMultiplier || 1;
         if (this.weaponType === 'tigerBlade') {
             this.reloadDuration *= 2;
         }
+        this.reloadDuration = Math.floor(this.reloadDuration);
     }
 
     createHud() {
@@ -3415,6 +3433,14 @@ class GameScene extends Phaser.Scene {
         this.currentGunMuzzle = this.getMuzzleFromAim(aimAngle);
         this.gunSprite.setVisible(true);
         this.gunSprite.setPosition(pivot.x, pivot.y);
+        if (this.weaponType === 'tigerBlade') {
+            const facingLeft = aimPoint.x < pivot.x;
+            this.gunSprite.setOrigin(0.78, 0.5);
+            this.gunSprite.setFlipY(facingLeft);
+            this.gunSprite.setRotation(aimAngle);
+            this.player.setRotation(0);
+            return;
+        }
         const gunFacesRight = !!this.weaponProfile?.gunFacesRight;
         this.gunSprite.setFlipY(gunFacesRight ? aimPoint.x < pivot.x : aimPoint.x > pivot.x);
         this.gunSprite.setRotation(aimAngle + (gunFacesRight ? 0 : Math.PI));
@@ -3628,21 +3654,22 @@ class GameScene extends Phaser.Scene {
 
     createTigerSlash(angle, damage, canDamage = true, radius = 92) {
         const pivot = this.getGunPivot();
-        const arcWidth = 0.72;
-        const slash = this.add.graphics().setDepth(4);
-        slash.lineStyle(10, 0xffd36a, 0.9);
-        slash.beginPath();
-        slash.arc(pivot.x, pivot.y, radius, angle - arcWidth, angle + arcWidth, false);
-        slash.strokePath();
-        slash.lineStyle(3, 0xffffff, 0.72);
-        slash.beginPath();
-        slash.arc(pivot.x, pivot.y, radius - 16, angle - arcWidth * 0.7, angle + arcWidth * 0.7, false);
-        slash.strokePath();
+        const arcWidth = 0.62;
+        const facingLeft = Math.cos(angle) < 0;
+        const swingStart = angle + (facingLeft ? -0.38 : 0.38);
+        const swingEnd = angle + (facingLeft ? 0.42 : -0.42);
+        const slash = this.add.image(pivot.x, pivot.y, this.gunTextureKey || 'tiger_gun')
+            .setOrigin(0.78, 0.5)
+            .setScale((this.weaponProfile?.gunScale || 0.2) * 1.06)
+            .setFlipY(facingLeft)
+            .setRotation(swingStart)
+            .setAlpha(0.86)
+            .setDepth(4);
         this.tweens.add({
             targets: slash,
+            rotation: swingEnd,
             alpha: 0,
-            scale: 1.18,
-            duration: 180,
+            duration: 150,
             ease: 'Sine.easeOut',
             onComplete: () => slash.destroy()
         });
