@@ -13,24 +13,57 @@ const XP_ORB_PLAYER_SPEED_BONUS = 120;
 const IDLE_RUN_TAPIOCA_TICK_MS = 1000;
 const PER_RUN_DAMAGE_BOOST_PERCENT = 0.10;
 const LYCHEE_PROJECTILE_LIFESPAN_MS = 1200;
+const BUILD_ABILITY_DURATION_MS = 4200;
 
+// BUILD SETUP: swap the texture keys here after you add custom character/weapon assets.
+// For new files, add them to BOOT_IMAGE_ASSETS below, then point playerTexture/gunTexture/projectileTexture at the new keys.
 const DRINK_OPTIONS = [
     {
         id: 'classic',
-        name: 'Classic Boba',
-        desc: 'Balanced milk tea body',
+        name: 'Classic Milk Tea',
+        desc: 'Dash reloads ammo and briefly boosts fire rate',
         playerTexture: 'player_boba',
         playerScale: 0.14,
+        abilityType: 'classicDash',
         accent: 0xf6b84b
     },
     {
+        id: 'strawberry',
+        name: 'Strawberry Boba',
+        desc: 'Sugar Rush boosts speed and fire rate',
+        playerTexture: 'strawberry_player',
+        playerScale: 0.28,
+        playerOrigin: { x: 0.527, y: 0.578 },
+        abilityType: 'sugarRush',
+        accent: 0xff6f9f
+    },
+    {
+        id: 'matcha',
+        name: 'Matcha Boba',
+        desc: 'Zen Garden heals and slows nearby enemies',
+        playerTexture: 'player_boba',
+        playerScale: 0.14,
+        abilityType: 'zenGarden',
+        accent: 0x83f28f
+    },
+    {
         id: 'lychee',
-        name: 'Lychee',
-        desc: 'Light and sharp fruit build',
+        name: 'Lychee Boba',
+        desc: 'Crystal Focus slows time and tightens aim',
         playerTexture: 'lychee_player_ui',
         playerScale: 0.18,
         playerOrigin: { x: 0.5, y: 0.5 },
+        abilityType: 'crystalFocus',
         accent: 0xff5fa2
+    },
+    {
+        id: 'brown-sugar',
+        name: 'Brown Sugar Boba',
+        desc: 'Molten Core reduces damage and burns nearby enemies',
+        playerTexture: 'player_boba',
+        playerScale: 0.14,
+        abilityType: 'moltenCore',
+        accent: 0xffb14f
     }
 ];
 
@@ -38,7 +71,7 @@ const GUN_OPTIONS = [
     {
         id: 'classic',
         name: 'Boba Blaster',
-        desc: 'Single accurate pearl',
+        desc: 'Medium-speed pearls with steady DPS',
         gunTexture: 'boba_gun',
         projectileTexture: 'projectile_boba',
         gunScale: 0.055,
@@ -48,12 +81,49 @@ const GUN_OPTIONS = [
         spread: 0.4,
         damageMultiplier: 1,
         fireRateMultiplier: 1,
+        synergy: 'Dash through enemies to reload ammo and briefly boost fire rate.',
         accent: 0x7ed2ff
+    },
+    {
+        id: 'strawberry-shotgun',
+        name: 'Strawberry Shotgun',
+        desc: 'Wide spread, high damage up close',
+        gunTexture: 'strawberry_gun',
+        projectileTexture: 'lychee_projectile',
+        gunScale: 0.12,
+        projectileScale: 0.038,
+        projectileSpeed: 500,
+        projectileLifespan: 850,
+        projectileCount: 6,
+        spread: 0.95,
+        damageMultiplier: 0.42,
+        fireRateMultiplier: 1.45,
+        weaponType: 'strawberryShotgun',
+        synergy: 'Closer hits land harder; SPACE increases pellet pressure.',
+        accent: 0xff6f9f
+    },
+    {
+        id: 'matcha-orb',
+        name: 'Matcha Orb Launcher',
+        desc: 'Slow lingering orbs deal zone damage',
+        gunTexture: 'boba_gun',
+        projectileTexture: 'projectile_boba',
+        gunScale: 0.055,
+        projectileScale: 0.28,
+        projectileSpeed: 260,
+        projectileLifespan: 4300,
+        projectileCount: 1,
+        spread: 0.15,
+        damageMultiplier: 0.55,
+        fireRateMultiplier: 2.1,
+        weaponType: 'matchaOrb',
+        synergy: 'Standing near orb zones heals; SPACE doubles orb duration.',
+        accent: 0x83f28f
     },
     {
         id: 'lychee-shotgun',
         name: 'Lychee Shotgun',
-        desc: 'Four lighter pellets in a cone',
+        desc: 'Tight fast pellets with high burst damage',
         gunTexture: 'lychee_shotgun',
         projectileTexture: 'lychee_projectile',
         gunScale: 0.0825,
@@ -64,7 +134,27 @@ const GUN_OPTIONS = [
         spread: 0.62,
         damageMultiplier: 0.3,
         fireRateMultiplier: 1.7,
+        weaponType: 'lycheeShotgun',
+        synergy: 'Repeated pellet hits on one target ramp damage; SPACE tightens spread.',
         accent: 0xff5fa2
+    },
+    {
+        id: 'caramel-flamethrower',
+        name: 'Caramel Flamethrower',
+        desc: 'Short-range burn with syrup puddles',
+        gunTexture: 'boba_gun',
+        projectileTexture: 'projectile_boba',
+        gunScale: 0.06,
+        projectileScale: 0.12,
+        projectileSpeed: 340,
+        projectileLifespan: 520,
+        projectileCount: 4,
+        spread: 0.5,
+        damageMultiplier: 0.28,
+        fireRateMultiplier: 0.42,
+        weaponType: 'caramelFlame',
+        synergy: 'Burns leave syrup zones; SPACE creates a molten burn aura.',
+        accent: 0xffb14f
     }
 ];
 
@@ -101,7 +191,10 @@ function getSelectedBuildProfile() {
         projectileCount: gun.projectileCount,
         spread: gun.spread,
         damageMultiplier: gun.damageMultiplier,
-        fireRateMultiplier: gun.fireRateMultiplier
+        fireRateMultiplier: gun.fireRateMultiplier,
+        weaponType: gun.weaponType || 'classic',
+        abilityType: drink.abilityType || 'classicDash',
+        synergy: gun.synergy || ''
     };
 }
 
@@ -238,10 +331,11 @@ const SaveManager = {
 // CHARACTER DEFINITIONS
 // ============================================
 const CHARACTERS = [
-    { name: 'Classic Boba', color: 0x8B4513, speed: 160, damage: 10, fireRate: 300, desc: 'Balanced starter' },
-    { name: 'Taro Milk', color: 0x9B59B6, speed: 150, damage: 8, fireRate: 200, desc: 'Fast shooter, less damage' },
-    { name: 'Matcha Latte', color: 0x27AE60, speed: 140, damage: 15, fireRate: 400, desc: 'Slow but powerful' },
-    { name: 'Brown Sugar', color: 0xD35400, speed: 190, damage: 12, fireRate: 350, desc: 'Fastest movement' }
+    { name: 'Classic Milk Tea', color: 0x8B4513, speed: 160, damage: 10, fireRate: 300, desc: 'Balanced starter' },
+    { name: 'Strawberry Boba', color: 0xff6f9f, speed: 170, damage: 11, fireRate: 320, desc: 'Close-range rush build' },
+    { name: 'Matcha Boba', color: 0x27AE60, speed: 145, damage: 9, fireRate: 420, desc: 'Zone control and healing' },
+    { name: 'Lychee Boba', color: 0xff5fa2, speed: 165, damage: 10, fireRate: 290, desc: 'Burst accuracy build' },
+    { name: 'Brown Sugar Boba', color: 0xD35400, speed: 150, damage: 12, fireRate: 230, desc: 'Short-range burn build' }
 ];
 
 // IDLE FACTORY TUNING: these machines create tapioca offline, in menus, and now during runs.
@@ -844,6 +938,8 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'player_boba', path: 'assets/Player/player-boba.png' },
     { key: 'boba_gun', path: 'assets/Player/boba-gun.png' },
     { key: 'projectile_boba', path: 'assets/projectile-boba.png' },
+    { key: 'strawberry_player', path: 'assets/Player/Strawberry Player.png' },
+    { key: 'strawberry_gun', path: 'assets/Player/Strawberry Gun.png' },
     { key: 'lychee_player', path: 'assets/Player/Lychee Player.png' },
     { key: 'lychee_shotgun', path: 'assets/Player/Lychee Shotgun.png' },
     { key: 'lychee_projectile', path: 'assets/Player/Lychee Projectile.png' },
@@ -907,8 +1003,8 @@ class BootScene extends Phaser.Scene {
 
             await new Promise((resolve, reject) => {
                 const source = getImageSource(asset.path);
-                if (!source || source === asset.path) {
-                    reject(new Error(`Missing embedded asset ${asset.path}`));
+                if (!source) {
+                    reject(new Error(`Missing asset ${asset.path}`));
                     return;
                 }
 
@@ -1292,10 +1388,11 @@ class MenuScene extends Phaser.Scene {
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
         this.createBuildSelector();
-        this.runHintText = this.add.text(600, 610, 'Use the wheels to pick a drink body and gun.', {
-            fontSize: '12px',
+        this.runHintText = this.add.text(600, 608, 'Use the wheels to pick a character and weapon.', {
+            fontSize: '11px',
             fill: '#c2cbda',
             align: 'center',
+            wordWrap: { width: 330 },
             lineSpacing: 4
         }).setOrigin(0.5);
 
@@ -1303,7 +1400,7 @@ class MenuScene extends Phaser.Scene {
 
         this.makeButton(210, 660, 'START GAME', () => {
             GameState.reset();
-            GameState.selectedCharacter = 0;
+            GameState.selectedCharacter = Math.max(0, DRINK_OPTIONS.findIndex(option => option.id === GameState.selectedDrink));
             this.scene.start('GameScene');
         }, 0x66c878, 0x153a20, 180);
 
@@ -1441,8 +1538,8 @@ class MenuScene extends Phaser.Scene {
     }
 
     createBuildSelector() {
-        this.drinkWheel = this.makeBuildWheel(600, 396, 'DRINK', DRINK_OPTIONS, 'drink');
-        this.gunWheel = this.makeBuildWheel(600, 520, 'GUN', GUN_OPTIONS, 'gun');
+        this.drinkWheel = this.makeBuildWheel(600, 396, 'CHARACTER', DRINK_OPTIONS, 'drink');
+        this.gunWheel = this.makeBuildWheel(600, 520, 'WEAPON', GUN_OPTIONS, 'gun');
     }
 
     makeBuildWheel(x, y, label, options, type) {
@@ -1517,8 +1614,10 @@ class MenuScene extends Phaser.Scene {
         const nextIndex = Phaser.Math.Wrap(currentIndex + direction, 0, options.length);
         if (type === 'drink') {
             GameState.selectedDrink = options[nextIndex].id;
+            GameState.selectedGun = GUN_OPTIONS[nextIndex % GUN_OPTIONS.length].id;
         } else {
             GameState.selectedGun = options[nextIndex].id;
+            GameState.selectedDrink = DRINK_OPTIONS[nextIndex % DRINK_OPTIONS.length].id;
         }
         sanitizeBuildState();
         SaveManager.save();
@@ -1641,6 +1740,7 @@ class MenuScene extends Phaser.Scene {
         this.updateWheelPreview(this.drinkWheel);
         this.updateWheelPreview(this.gunWheel);
         this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
+        this.runHintText?.setText(gun.synergy || 'Use the wheels to pick a character and weapon.');
         if (this.charPreview) {
             const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
             this.charPreview.setTexture(drink.playerTexture).setOrigin(drinkOrigin.x, drinkOrigin.y).setScale(drink.playerScale * 1.72);
@@ -2272,6 +2372,8 @@ class GameScene extends Phaser.Scene {
         this.playerTextureKey = this.weaponProfile.playerTexture;
         this.gunTextureKey = this.weaponProfile.gunTexture;
         this.projectileTextureKey = this.weaponProfile.projectileTexture;
+        this.buildAbilityType = this.weaponProfile.abilityType || 'classicDash';
+        this.weaponType = this.weaponProfile.weaponType || 'classic';
         this.playerSpeed *= 1 + (getUnlockedIdleMutationLevel('ballRoller') * 0.01);
         this.multiShot = char.multiShot || 1;
         this.maxBounces = char.maxBounces || 0;
@@ -2320,6 +2422,21 @@ class GameScene extends Phaser.Scene {
         this.dashDamageReduction = 0;
         this.dashUntil = 0;
         this.lastMoveDir = { x: 0, y: -1 };
+        this.abilityCooldownMs = 5200;
+        this.nextAbilityAt = 0;
+        this.abilityActiveUntil = 0;
+        this.fireRateBoostUntil = 0;
+        this.fireRateBoostMultiplier = 1;
+        this.speedBoostUntil = 0;
+        this.speedBoostMultiplier = 1;
+        this.accuracyBoostUntil = 0;
+        this.matchaOrbDurationBoostUntil = 0;
+        this.moltenCoreUntil = 0;
+        this.moltenDamageReduction = 0;
+        this.syrupZones = [];
+        this.damageZones = [];
+        this.shotVolleyId = 0;
+        this.lycheeVolleyHits = new Map();
 
         this.hasFreeze = false;
         this.hasExplode = false;
@@ -2536,7 +2653,7 @@ class GameScene extends Phaser.Scene {
 
         if (!this.playerDown && GameState.aimMode === 'manual') {
             this.updateManualFire(time);
-        } else if (!this.playerDown && time >= this.lastFireTime + this.playerFireRate) {
+        } else if (!this.playerDown && time >= this.lastFireTime + this.getEffectiveFireRate()) {
             const aimPoint = this.getCurrentAimPoint();
             if (aimPoint && this.shootBoba(aimPoint)) {
                 this.lastFireTime = time;
@@ -2545,9 +2662,11 @@ class GameScene extends Phaser.Scene {
 
         const projectiles = [...this.bobas.children.entries];
         const enemies = [...this.enemies.children.entries];
+        this.updateBuildAbilityZones(time, enemies);
         projectiles.forEach(boba => {
             if (!boba.active) return;
             this.updateBobaGrowth(boba);
+            this.updateLingeringOrbDamage(boba, enemies, time);
             enemies.forEach(enemy => {
                 if (!enemy.active || !boba.active) return;
                 const dist = Phaser.Math.Distance.Between(boba.x, boba.y, enemy.x, enemy.y);
@@ -2614,7 +2733,7 @@ class GameScene extends Phaser.Scene {
 
     updateDash(time) {
         if (Phaser.Input.Keyboard.JustDown(this.cursors.dash)) {
-            this.tryDash(time);
+            this.tryBuildAbility(time);
         }
         if (this.isDashing && time >= this.dashUntil) {
             this.isDashing = false;
@@ -2645,6 +2764,69 @@ class GameScene extends Phaser.Scene {
         this.createDashEffect(dir);
         this.applyDashKnockback(dir);
         this.updateUI();
+    }
+
+    tryBuildAbility(time) {
+        if (this.playerDown || this.runEnded || time < this.nextAbilityAt) return;
+        if (this.buildAbilityType === 'classicDash') {
+            this.tryDash(time);
+            return;
+        }
+        this.nextAbilityAt = time + this.abilityCooldownMs;
+        this.abilityActiveUntil = time + BUILD_ABILITY_DURATION_MS;
+
+        if (this.buildAbilityType === 'sugarRush') {
+            this.speedBoostUntil = this.abilityActiveUntil;
+            this.speedBoostMultiplier = 1.9;
+            this.fireRateBoostUntil = this.abilityActiveUntil;
+            this.fireRateBoostMultiplier = 1.85;
+            this.createAbilityPulse(0xff6f9f, 96);
+        } else if (this.buildAbilityType === 'zenGarden') {
+            this.createTimedDamageZone(this.player.x, this.player.y, 120, 0x83f28f, 0.12, this.abilityActiveUntil, {
+                followPlayer: true,
+                healPerTick: 2,
+                slow: 0.45
+            });
+            this.matchaOrbDurationBoostUntil = time + 7000;
+            this.createAbilityPulse(0x83f28f, 128);
+        } else if (this.buildAbilityType === 'crystalFocus') {
+            this.accuracyBoostUntil = this.abilityActiveUntil;
+            this.fireRateBoostUntil = this.abilityActiveUntil;
+            this.fireRateBoostMultiplier = 1.25;
+            this.enemies.children.entries.forEach(enemy => {
+                if (!enemy.active) return;
+                enemy.nextAttackAt = Math.max(enemy.nextAttackAt || 0, time + 700);
+                enemy.body.velocity.scale(0.45);
+                enemy.setTint(0xb7f7ff);
+            });
+            this.time.delayedCall(BUILD_ABILITY_DURATION_MS, () => {
+                this.enemies?.children.entries.forEach(enemy => { if (enemy.active) enemy.clearTint(); });
+            });
+            this.createAbilityPulse(0x8ee8ff, 112);
+        } else if (this.buildAbilityType === 'moltenCore') {
+            this.moltenCoreUntil = this.abilityActiveUntil;
+            this.moltenDamageReduction = 0.35;
+            this.createTimedDamageZone(this.player.x, this.player.y, 118, 0xff8a2a, 0.14, this.abilityActiveUntil, {
+                followPlayer: true,
+                damagePerTick: this.playerDamage * 0.28
+            });
+            this.createAbilityPulse(0xffb14f, 120);
+        }
+        this.updateUI();
+    }
+
+    createAbilityPulse(color, radius) {
+        const pulse = this.add.circle(this.player.x, this.player.y, radius, color, 0.18)
+            .setStrokeStyle(3, color, 0.65)
+            .setDepth(2);
+        this.tweens.add({
+            targets: pulse,
+            alpha: 0,
+            scale: 1.8,
+            duration: 420,
+            ease: 'Sine.easeOut',
+            onComplete: () => pulse.destroy()
+        });
     }
 
     getDashDirection() {
@@ -2713,20 +2895,112 @@ class GameScene extends Phaser.Scene {
     }
 
     applyDashKnockback(dir) {
+        let dashedThroughEnemy = false;
         this.enemies?.children.entries.forEach(enemy => {
             if (!enemy.active) return;
             const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
             if (dist > 120) return;
+            dashedThroughEnemy = true;
             const away = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
             enemy.body.setVelocity(Math.cos(away) * 460 + dir.x * 180, Math.sin(away) * 460 + dir.y * 180);
             enemy.nextAttackAt = Math.max(enemy.nextAttackAt || 0, this.time.now + 450);
+            enemy.hp -= this.playerDamage * 0.85;
+            this.showDamageNumber(enemy.x, enemy.y, this.playerDamage * 0.85, '#9dfff2');
+            if (enemy.hp <= 0) {
+                this.killEnemyFromAbility(enemy);
+            }
+        });
+        if (dashedThroughEnemy && this.buildAbilityType === 'classicDash') {
+            this.bobaCount = this.maxBobaCount;
+            this.fireRateBoostUntil = this.time.now + 1800;
+            this.fireRateBoostMultiplier = 1.65;
+            this.reloadText.setVisible(false);
+        }
+    }
+
+    createTimedDamageZone(x, y, radius, color, alpha, expiresAt, options = {}) {
+        const zone = {
+            x, y, radius, expiresAt,
+            followPlayer: !!options.followPlayer,
+            damagePerTick: options.damagePerTick || 0,
+            healPerTick: options.healPerTick || 0,
+            slow: options.slow || 0,
+            nextTickAt: this.time.now,
+            graphic: this.add.circle(x, y, radius, color, alpha)
+                .setStrokeStyle(2, color, 0.5)
+                .setDepth(1)
+        };
+        this.damageZones.push(zone);
+        return zone;
+    }
+
+    updateBuildAbilityZones(time, enemies = []) {
+        if (this.moltenCoreUntil > 0 && time >= this.moltenCoreUntil) {
+            this.moltenCoreUntil = 0;
+            this.moltenDamageReduction = 0;
+        }
+        this.damageZones = this.damageZones.filter(zone => {
+            if (time >= zone.expiresAt) {
+                zone.graphic?.destroy();
+                return false;
+            }
+            if (zone.followPlayer) {
+                zone.x = this.player.x;
+                zone.y = this.player.y;
+                zone.graphic.setPosition(zone.x, zone.y);
+            }
+            if (time < zone.nextTickAt) return true;
+            zone.nextTickAt = time + 450;
+            if (zone.healPerTick > 0 && !this.playerDown) {
+                GameState.health = Math.min(GameState.maxHealth, GameState.health + zone.healPerTick);
+            }
+            enemies.forEach(enemy => {
+                if (!enemy.active) return;
+                const dist = Phaser.Math.Distance.Between(zone.x, zone.y, enemy.x, enemy.y);
+                if (dist > zone.radius) return;
+                if (zone.slow > 0) {
+                    enemy.body.velocity.scale(zone.slow);
+                    enemy.nextAttackAt = Math.max(enemy.nextAttackAt || 0, time + 280);
+                }
+                if (zone.damagePerTick > 0) {
+                    enemy.hp -= zone.damagePerTick;
+                    this.showDamageNumber(enemy.x, enemy.y, zone.damagePerTick, '#ffb14f');
+                    if (enemy.hp <= 0) {
+                        this.killEnemyFromAbility(enemy);
+                    }
+                }
+            });
+            return true;
+        });
+    }
+
+    updateLingeringOrbDamage(boba, enemies, time) {
+        if (boba.weaponType !== 'matchaOrb' || time < (boba.nextZoneTickAt || 0)) return;
+        boba.nextZoneTickAt = time + 520;
+        enemies.forEach(enemy => {
+            if (!enemy.active) return;
+            const dist = Phaser.Math.Distance.Between(boba.x, boba.y, enemy.x, enemy.y);
+            if (dist > 64) return;
+            const damage = (boba.baseDamage || this.playerDamage) * 0.32;
+            enemy.hp -= damage;
+            enemy.body.velocity.scale(0.72);
+            this.showDamageNumber(enemy.x, enemy.y, damage, '#83f28f');
+            if (enemy.hp <= 0) {
+                this.killEnemyFromAbility(enemy);
+            }
         });
     }
 
     getEffectivePlayerSpeed() {
-        return this.xpSpeedBoostEnabled && this.time.now < this.xpSpeedBoostUntil
-            ? this.playerSpeed * 2
-            : this.playerSpeed;
+        let speed = this.playerSpeed;
+        if (this.xpSpeedBoostEnabled && this.time.now < this.xpSpeedBoostUntil) speed *= 2;
+        if (this.time.now < this.speedBoostUntil) speed *= this.speedBoostMultiplier;
+        return speed;
+    }
+
+    getEffectiveFireRate() {
+        const boost = this.time.now < this.fireRateBoostUntil ? this.fireRateBoostMultiplier : 1;
+        return Math.max(45, this.playerFireRate / boost);
     }
 
     applySpeedDamageBonus() {
@@ -2959,7 +3233,7 @@ class GameScene extends Phaser.Scene {
     fireManualClick(pointer, time) {
         if (GameState.aimMode !== 'manual') return;
         if (GameState.paused || this.runEnded || this.playerDown) return;
-        if (time < this.lastFireTime + this.playerFireRate) return;
+        if (time < this.lastFireTime + this.getEffectiveFireRate()) return;
 
         const aimPoint = this.getPointerAimPoint(pointer);
         if (aimPoint && this.shootBoba(aimPoint)) {
@@ -3080,16 +3354,20 @@ class GameScene extends Phaser.Scene {
 
         let fired = false;
         const projectileCount = Math.max(1, this.multiShot || 1);
-        const spread = this.weaponProfile?.spread || 0.4;
+        let spread = this.weaponProfile?.spread || 0.4;
+        if (this.time.now < this.accuracyBoostUntil) {
+            spread *= 0.35;
+        }
         const projectileDamage = this.playerDamage * this.getAmmoDamageMultiplier();
+        const volleyId = ++this.shotVolleyId;
 
         // Fire shotgun/multishot pearls evenly from the same gun muzzle point.
         if (projectileCount === 1) {
-            fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle, projectileDamage);
+            fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle, projectileDamage, 0, 'gun', volleyId);
         } else {
             for (let i = 0; i < projectileCount; i++) {
                 const spreadAngle = ((i / (projectileCount - 1)) - 0.5) * spread;
-                fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle + spreadAngle, projectileDamage) || fired;
+                fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle + spreadAngle, projectileDamage, 0, 'gun', volleyId) || fired;
             }
         }
 
@@ -3099,7 +3377,7 @@ class GameScene extends Phaser.Scene {
         return true;
     }
 
-    createPlayerBoba(spawnX, spawnY, angle, damage = this.playerDamage, splitDepth = 0, source = 'gun') {
+    createPlayerBoba(spawnX, spawnY, angle, damage = this.playerDamage, splitDepth = 0, source = 'gun', volleyId = 0) {
         if (!Number.isFinite(angle)) return null;
         if (source === 'gun' && (!Number.isFinite(spawnX) || !Number.isFinite(spawnY))) {
             const muzzle = this.getPlayerShotOrigin(angle);
@@ -3131,8 +3409,10 @@ class GameScene extends Phaser.Scene {
         boba.canPickup = false;
         boba.owner = 'player';
         boba.source = source;
+        boba.weaponType = this.weaponType;
+        boba.volleyId = volleyId;
         boba.damage = damage;
-        boba.pierceRemaining = this.projectilePierce;
+        boba.pierceRemaining = this.weaponType === 'matchaOrb' ? 999 : this.projectilePierce;
         boba.pierceHits = 0;
         boba.hitEnemyIds = new Set();
         boba.spawnX = spawnX;
@@ -3159,9 +3439,16 @@ class GameScene extends Phaser.Scene {
                 boba.hasBounced = true;
             }
         });
-        const lifespan = source === 'gun' ? this.projectileLifespan : 1800;
+        const lifespan = source === 'gun'
+            ? (this.time.now < this.matchaOrbDurationBoostUntil && this.weaponType === 'matchaOrb' ? this.projectileLifespan * 2 : this.projectileLifespan)
+            : 1800;
         this.time.delayedCall(lifespan, () => {
             if (boba.active) {
+                if (boba.weaponType === 'caramelFlame') {
+                    this.createTimedDamageZone(boba.x, boba.y, 46, 0xff8a2a, 0.11, this.time.now + 2300, {
+                        damagePerTick: this.playerDamage * 0.22
+                    });
+                }
                 boba.destroy();
             }
         });
@@ -3336,7 +3623,16 @@ class GameScene extends Phaser.Scene {
             this.time.delayedCall(900, () => { if (enemy.active) enemy.clearTint(); });
         }
 
-        const damage = (boba.damage || this.playerDamage) * (1 + ((boba.pierceHits || 0) * this.pierceDamageScale));
+        let damage = (boba.damage || this.playerDamage) * (1 + ((boba.pierceHits || 0) * this.pierceDamageScale));
+        if (boba.weaponType === 'strawberryShotgun') {
+            const travel = Phaser.Math.Distance.Between(boba.spawnX, boba.spawnY, boba.x, boba.y);
+            damage *= Phaser.Math.Clamp(1.65 - (travel / 360), 0.55, 1.65);
+        } else if (boba.weaponType === 'lycheeShotgun' && boba.volleyId) {
+            const key = `${boba.volleyId}:${enemy.enemyId}`;
+            const hits = (this.lycheeVolleyHits.get(key) || 0) + 1;
+            this.lycheeVolleyHits.set(key, hits);
+            damage *= 1 + ((hits - 1) * 0.18);
+        }
         this.showDamageNumber(enemy.x, enemy.y, damage);
 
         if ((boba.pierceRemaining || 0) > 0) {
@@ -3416,6 +3712,31 @@ class GameScene extends Phaser.Scene {
         GameState.enemiesKilledThisRun++;
         GameState.totalEnemiesKilled++;
         this.enemiesKilledThisWave++;
+    }
+
+    killEnemyFromAbility(enemy) {
+        if (!enemy?.active) return;
+        const killX = enemy.x;
+        const killY = enemy.y;
+        const killedThrower = enemy.enemyType === 'thrower';
+        enemy.destroy();
+        this.registerEnemyKill();
+        this.spawnXpPickup(killX, killY);
+        if (killedThrower) {
+            this.spawnHealingPickup(killX, killY);
+        }
+        const rageGain = getRagePerKill(this);
+        GameState.rage += rageGain;
+        GameState.totalRage += rageGain;
+        GameState.runRageEarned += rageGain;
+        const tcGain = getTcPerKill();
+        GameState.tc += tcGain;
+        GameState.runTcEarned += tcGain;
+        if (!this.waveTransitioning && this.enemiesKilledThisWave >= this.enemiesPerWave) {
+            this.completeWave();
+        }
+        this.updateUI();
+        this.maybeLaunchLevelUpgrade();
     }
 
     splitBobaFromKill(sourceBoba, x, y) {
@@ -3501,7 +3822,7 @@ class GameScene extends Phaser.Scene {
 
     damagePlayer(rawDamage) {
         if (this.runEnded || this.deathTransitionPending || this.playerDown) return;
-        const totalReduction = Math.min(0.9, (this.damageReductionPercent || 0) + (this.dashDamageReduction || 0));
+        const totalReduction = Math.min(0.9, (this.damageReductionPercent || 0) + (this.dashDamageReduction || 0) + (this.moltenDamageReduction || 0));
         const reducedDamage = rawDamage * (1 - totalReduction);
         const damage = Math.max(1, reducedDamage - (this.damageReduction || 0));
         GameState.health = Math.max(0, GameState.health - damage);
@@ -3677,10 +3998,17 @@ class GameScene extends Phaser.Scene {
         this.rageText.setText(`RAGE: ${Math.floor(GameState.rage)} (+${getRagePerKill(this)}/kill)`);
         this.tcText.setText(`TC: ${Math.floor(GameState.tc)} (+${getTcPerKill()}/kill)`);
         this.outputText.setText(`RUN: +${Math.floor(GameState.runTcEarned)} TC  +${Math.floor(GameState.runTapiocaEarned)} TP`);
-        const dashCooldown = this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt > 0
-            ? ` ${Math.max(0, Math.ceil((this.nextDashRechargeAt - this.time.now) / 1000))}s`
-            : '';
-        this.dashText.setText(`DASH: ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
+        if (this.buildAbilityType === 'classicDash') {
+            const dashCooldown = this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt > 0
+                ? ` ${Math.max(0, Math.ceil((this.nextDashRechargeAt - this.time.now) / 1000))}s`
+                : '';
+            this.dashText.setText(`SPACE DASH: ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
+        } else {
+            const abilityCooldown = this.time.now < this.nextAbilityAt
+                ? ` ${Math.max(0, Math.ceil((this.nextAbilityAt - this.time.now) / 1000))}s`
+                : ' READY';
+            this.dashText.setText(`SPACE: ${abilityCooldown}`);
+        }
 
         this.waveText.setText(`WAVE ${GameState.wave}`);
         this.scoreText.setText(`SCORE: ${GameState.score}`);
