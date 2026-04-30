@@ -6,6 +6,7 @@
     const DEFAULT_API_URL = 'https://boba-roguelike.onrender.com';
 
     let apiUrl = cleanApiUrl(window.BOBA_API_URL || localStorage.getItem(API_KEY) || DEFAULT_API_URL);
+    let lastLeaderboardSubmit = { status: 'idle', message: '' };
     if (apiUrl.includes('boba-roguelike-api.onrender.com')) {
         apiUrl = DEFAULT_API_URL;
         localStorage.setItem(API_KEY, apiUrl);
@@ -65,13 +66,14 @@
     }
 
     async function fetchLeaderboard() {
+        const local = getLocalLeaderboard();
         try {
             const data = await request('/leaderboard');
             const remote = data.leaders || [];
-            return remote.length ? remote : getLocalLeaderboard();
+            return mergeLeaderboards(remote, local);
         } catch (error) {
             console.warn('Remote leaderboard unavailable, using local scores', error);
-            return getLocalLeaderboard();
+            return local;
         }
     }
 
@@ -84,9 +86,11 @@
                 method: 'POST',
                 body: JSON.stringify({ ...stats, username })
             });
+            lastLeaderboardSubmit = { status: 'remote', message: `Posted to leaderboard as ${username}.` };
             return data.stats || localStats;
         } catch (error) {
             console.warn('Remote leaderboard submit failed, kept local score', error);
+            lastLeaderboardSubmit = { status: 'local', message: `Saved locally as ${username}; remote post failed.` };
             return localStats;
         }
     }
@@ -102,6 +106,25 @@
     function getLocalLeaderboard() {
         return Object.entries(readLocalLeaderboard())
             .map(([username, stats]) => ({ username, ...stats }))
+            .sort((a, b) => (b.high_score - a.high_score) || (b.total_kills - a.total_kills))
+            .slice(0, 10);
+    }
+
+    function mergeLeaderboards(remote = [], local = []) {
+        const merged = new Map();
+        [...remote, ...local].forEach(entry => {
+            const username = sanitizeUsername(entry.username);
+            if (!username) return;
+            const current = merged.get(username) || { username, high_score: 0, total_kills: 0, best_level: 1, runs_played: 0 };
+            merged.set(username, {
+                username,
+                high_score: Math.max(current.high_score || 0, Math.floor(Number(entry.high_score) || 0)),
+                total_kills: Math.max(current.total_kills || 0, Math.floor(Number(entry.total_kills) || 0)),
+                best_level: Math.max(current.best_level || 1, Math.floor(Number(entry.best_level) || 1)),
+                runs_played: Math.max(current.runs_played || 0, Math.floor(Number(entry.runs_played) || 0))
+            });
+        });
+        return Array.from(merged.values())
             .sort((a, b) => (b.high_score - a.high_score) || (b.total_kills - a.total_kills))
             .slice(0, 10);
     }
@@ -233,6 +256,7 @@
         setUsername,
         getApiUrl: () => apiUrl,
         setApiUrl,
+        getLastLeaderboardSubmit: () => lastLeaderboardSubmit,
         exportSaveCode,
         importSaveCode
     };

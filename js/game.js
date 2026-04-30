@@ -251,6 +251,7 @@ const IDLE_MACHINE_TABLE = [
     { id: 'megaPress', name: 'Mega Press', desc: 'Bulk pressing line', icon: 'MP', baseCost: 200, costScale: 1.10, tps: 5, evolutionPts: 5, mutationText: '+1% rage per kill each' },
     { id: 'quantumGen', name: 'Quantum Gen', desc: 'Reality-warped generator', icon: 'QG', baseCost: 1000, costScale: 1.20, tps: 10, evolutionPts: 10, mutationText: '-0.1% upgrade costs each' }
 ];
+const IDLE_MACHINE_MUTATION_UNLOCK_LEVEL = 10;
 
 const IDLE_FACTORY_TECH = [
     { id: 'factoryUpgrade', name: 'Factory Upgrade', desc: 'Multiply all machine output by 1.5x', icon: 'F+', baseCost: 100000, costScale: 2.50, evolutionPts: 200, effectText: '1.5x all machine output' },
@@ -431,7 +432,7 @@ function calcIdleMachineTPS() {
 }
 
 function getRagePerKill(scene) {
-    const megaPressBonus = 1 + ((GameState.idleMachines?.megaPress || 0) * 0.01);
+    const megaPressBonus = 1 + (getUnlockedIdleMutationLevel('megaPress') * 0.01);
     const menuRageBonus = 1 + (scene?.permaRageBonusPercent || 0);
     if (GameState.wave === 1) {
         return Math.max(1, Math.floor((10 + ((scene?.permaEarlyWaveRageBonus || 0))) * megaPressBonus * menuRageBonus));
@@ -471,7 +472,16 @@ function getIdleTechLevel(id) {
 }
 
 function getQuantumCostReduction() {
-    return Math.min(0.75, (GameState.idleMachines?.quantumGen || 0) * 0.001);
+    return Math.min(0.75, getUnlockedIdleMutationLevel('quantumGen') * 0.001);
+}
+
+function getUnlockedIdleMutationLevel(machineId) {
+    const level = GameState.idleMachines?.[machineId] || 0;
+    return level >= IDLE_MACHINE_MUTATION_UNLOCK_LEVEL ? level : 0;
+}
+
+function isIdleMutationUnlocked(machineId) {
+    return getUnlockedIdleMutationLevel(machineId) > 0;
 }
 
 function getIdleTechCost(tech) {
@@ -1771,6 +1781,10 @@ class IdleFactoryScene extends Phaser.Scene {
         const cost = getIdleMachineCost(machine);
         const canAfford = GameState.rage >= cost;
         const output = getIdleMachineOutput(machine);
+        const mutationUnlocked = isIdleMutationUnlocked(machine.id);
+        const mutationLabel = mutationUnlocked
+            ? `MUTATION ON: ${machine.mutationText}`
+            : `MUTATION AT ${IDLE_MACHINE_MUTATION_UNLOCK_LEVEL}: ${machine.mutationText}`;
 
         const card = this.add.rectangle(x, y, 360, 64, 0x162b2d).setStrokeStyle(2, canAfford ? 0xffd700 : 0x4b7878);
         card.setInteractive({ useHandCursor: canAfford });
@@ -1781,9 +1795,9 @@ class IdleFactoryScene extends Phaser.Scene {
 
         this.machineCardRoots.push(this.add.text(x - 156, y, machine.icon, { fontSize: '18px', fill: '#fff4d6', fontFamily: 'Arial Black' }).setOrigin(0.5));
         this.machineCardRoots.push(this.add.text(x - 124, y - 16, machine.name, { fontSize: '13px', fill: '#fff', fontFamily: 'Arial Black' }).setOrigin(0, 0.5));
-        this.machineCardRoots.push(this.add.text(x - 124, y + 5, `${machine.desc} | ${machine.mutationText}`, {
+        this.machineCardRoots.push(this.add.text(x - 124, y + 5, `${machine.desc} | ${mutationLabel}`, {
             fontSize: '10px',
-            fill: '#a8d0cc',
+            fill: mutationUnlocked ? '#7cff8a' : '#a8d0cc',
             wordWrap: { width: 225 }
         }).setOrigin(0, 0.5));
         this.machineCardRoots.push(this.add.text(x + 138, y - 12, `Lvl ${level}`, { fontSize: '12px', fill: '#7ad8ff' }).setOrigin(0.5));
@@ -2258,7 +2272,7 @@ class GameScene extends Phaser.Scene {
         this.playerTextureKey = this.weaponProfile.playerTexture;
         this.gunTextureKey = this.weaponProfile.gunTexture;
         this.projectileTextureKey = this.weaponProfile.projectileTexture;
-        this.playerSpeed *= 1 + ((GameState.idleMachines?.ballRoller || 0) * 0.01);
+        this.playerSpeed *= 1 + (getUnlockedIdleMutationLevel('ballRoller') * 0.01);
         this.multiShot = char.multiShot || 1;
         this.maxBounces = char.maxBounces || 0;
         this.projectilePierce = 0;
@@ -2269,7 +2283,7 @@ class GameScene extends Phaser.Scene {
         this.basePlayerDamage *= this.weaponProfile.damageMultiplier || 1;
         this.playerFireRate *= this.weaponProfile.fireRateMultiplier || 1;
         this.multiShot = this.weaponProfile.projectileCount || this.multiShot;
-        this.playerDamage *= 1 + ((GameState.idleMachines?.ballMaker || 0) * 0.005);
+        this.playerDamage *= 1 + (getUnlockedIdleMutationLevel('ballMaker') * 0.005);
         this.pierceDamageScale = 0;
         this.bounceDamageScale = 0;
         this.wallSplitCount = 0;
@@ -3839,11 +3853,23 @@ class GameOverScene extends Phaser.Scene {
     create() {
         resetRunUiState(this);
         this.scene.bringToTop();
+        this.leaderboardSubmitText = null;
         window.BobaAuth?.submitRunStats?.({
             score: GameState.score,
             totalKills: GameState.totalEnemiesKilled,
             level: GameState.level
-        }).catch(error => console.warn('Leaderboard submit failed', error));
+        })
+            .then(() => {
+                const status = window.BobaAuth?.getLastLeaderboardSubmit?.();
+                if (this.leaderboardSubmitText && status?.message) {
+                    this.leaderboardSubmitText.setText(status.message);
+                    this.leaderboardSubmitText.setColor(status.status === 'remote' ? '#7cff8a' : '#ffd27a');
+                }
+            })
+            .catch(error => {
+                console.warn('Leaderboard submit failed', error);
+                this.leaderboardSubmitText?.setText('Leaderboard submit failed.');
+            });
         this.gameOverButtonBounds = [
             { x: GAME_CENTER_X, y: 530, width: 260, height: 64, target: 'GameScene' },
             { x: GAME_CENTER_X, y: 595, width: 260, height: 64, target: 'MenuScene' }
@@ -3866,6 +3892,13 @@ class GameOverScene extends Phaser.Scene {
 
         this.add.text(GAME_CENTER_X, 370, `Level: ${GameState.level}`, {
             fontSize: '20px', fill: '#3498db'
+        }).setOrigin(0.5);
+
+        this.leaderboardSubmitText = this.add.text(GAME_CENTER_X, 410, 'Saving leaderboard score...', {
+            fontSize: '13px',
+            fill: '#b8c9d8',
+            align: 'center',
+            wordWrap: { width: 480 }
         }).setOrigin(0.5);
 
         this.add.text(GAME_CENTER_X, 410, `TC EARNED THIS RUN: ${Math.floor(GameState.runTcEarned)}`, {
