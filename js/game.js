@@ -92,7 +92,8 @@ const GUN_OPTIONS = [
         desc: 'Wide spread, high damage up close',
         gunTexture: 'strawberry_gun',
         projectileTexture: 'strawberry_projectile',
-        gunScale: 0.12,
+        gunScale: 0.17,
+        gunFacesRight: true,
         projectileScale: 0.16,
         projectileSpeed: 500,
         projectileLifespan: 850,
@@ -107,10 +108,11 @@ const GUN_OPTIONS = [
     {
         id: 'matcha-orb',
         name: 'Matcha Orb Launcher',
-        desc: 'Slow lingering orbs deal zone damage',
+        desc: 'Poison orbs linger and lifesteal',
         gunTexture: 'matcha_gun',
         projectileTexture: 'matcha_projectile',
-        gunScale: 0.07,
+        gunScale: 0.105,
+        gunFacesRight: true,
         projectileScale: 0.24,
         projectileSpeed: 260,
         projectileLifespan: 4300,
@@ -119,7 +121,7 @@ const GUN_OPTIONS = [
         damageMultiplier: 0.55,
         fireRateMultiplier: 2.1,
         weaponType: 'matchaOrb',
-        synergy: 'Standing near orb zones heals; SPACE doubles orb duration.',
+        synergy: 'Poison damage steals life; SPACE doubles orb duration.',
         accent: 0x83f28f
     },
     {
@@ -146,7 +148,8 @@ const GUN_OPTIONS = [
         desc: 'Sword slash plus a focused tiger pearl',
         gunTexture: 'tiger_gun',
         projectileTexture: 'tiger_projectile',
-        gunScale: 0.14,
+        gunScale: 0.2,
+        gunFacesRight: true,
         projectileScale: 0.18,
         projectileSpeed: 520,
         projectileLifespan: 1700,
@@ -187,6 +190,7 @@ function getSelectedBuildProfile() {
         playerScale: drink.playerScale,
         playerOrigin: drink.playerOrigin || { x: 0.5, y: 0.5 },
         gunScale: gun.gunScale,
+        gunFacesRight: !!gun.gunFacesRight,
         projectileScale: gun.projectileScale,
         projectileSpeed: gun.projectileSpeed,
         projectileLifespan: gun.projectileLifespan || 2400,
@@ -2474,6 +2478,8 @@ class GameScene extends Phaser.Scene {
         this.damageZones = [];
         this.shotVolleyId = 0;
         this.lycheeVolleyHits = new Map();
+        this.matchaPoisonDamageScale = 0.28;
+        this.matchaLifestealScale = 0.15;
 
         this.hasFreeze = false;
         this.hasExplode = false;
@@ -2700,6 +2706,7 @@ class GameScene extends Phaser.Scene {
         const projectiles = [...this.bobas.children.entries];
         const enemies = [...this.enemies.children.entries];
         this.updateBuildAbilityZones(time, enemies);
+        this.updateMatchaPoison(time, enemies);
         projectiles.forEach(boba => {
             if (!boba.active) return;
             this.updateBobaGrowth(boba);
@@ -3018,10 +3025,43 @@ class GameScene extends Phaser.Scene {
             enemy.hp -= damage;
             enemy.body.velocity.scale(0.72);
             this.showDamageNumber(enemy.x, enemy.y, damage, '#83f28f');
+            this.applyMatchaPoison(enemy, boba.baseDamage || this.playerDamage);
+            this.healFromMatchaDamage(damage);
             if (enemy.hp <= 0) {
                 this.killEnemyFromAbility(enemy);
             }
         });
+    }
+
+    applyMatchaPoison(enemy, baseDamage = this.playerDamage) {
+        if (!enemy?.active) return;
+        enemy.matchaPoisonUntil = Math.max(enemy.matchaPoisonUntil || 0, this.time.now + 2400);
+        enemy.matchaPoisonDamage = Math.max(enemy.matchaPoisonDamage || 0, baseDamage * this.matchaPoisonDamageScale);
+        enemy.matchaPoisonNextTickAt = Math.min(enemy.matchaPoisonNextTickAt || Infinity, this.time.now + 420);
+        enemy.setTint(0x83f28f);
+    }
+
+    updateMatchaPoison(time, enemies = []) {
+        enemies.forEach(enemy => {
+            if (!enemy.active || !enemy.matchaPoisonUntil) return;
+            if (time >= enemy.matchaPoisonUntil) {
+                enemy.matchaPoisonUntil = 0;
+                enemy.matchaPoisonDamage = 0;
+                enemy.clearTint();
+                return;
+            }
+            if (time < (enemy.matchaPoisonNextTickAt || 0)) return;
+            enemy.matchaPoisonNextTickAt = time + 520;
+            const damage = enemy.matchaPoisonDamage || this.playerDamage * this.matchaPoisonDamageScale;
+            this.damageEnemyFromAbility(enemy, damage, '#83f28f');
+            this.healFromMatchaDamage(damage);
+        });
+    }
+
+    healFromMatchaDamage(damage) {
+        if (this.playerDown || GameState.health >= GameState.maxHealth) return;
+        const heal = Math.max(1, damage * this.matchaLifestealScale);
+        GameState.health = Math.min(GameState.maxHealth, GameState.health + heal);
     }
 
     getEffectivePlayerSpeed() {
@@ -3201,10 +3241,9 @@ class GameScene extends Phaser.Scene {
         this.currentGunMuzzle = this.getMuzzleFromAim(aimAngle);
         this.gunSprite.setVisible(true);
         this.gunSprite.setPosition(pivot.x, pivot.y);
-        // The source art faces left at zero rotation. Mirror it on right-side aim
-        // so the gun stays visually upright while projectiles keep the true angle.
-        this.gunSprite.setFlipY(aimPoint.x > pivot.x);
-        this.gunSprite.setRotation(aimAngle + Math.PI);
+        const gunFacesRight = !!this.weaponProfile?.gunFacesRight;
+        this.gunSprite.setFlipY(gunFacesRight ? aimPoint.x < pivot.x : aimPoint.x > pivot.x);
+        this.gunSprite.setRotation(aimAngle + (gunFacesRight ? 0 : Math.PI));
         this.player.setRotation(0);
     }
 
@@ -3706,6 +3745,10 @@ class GameScene extends Phaser.Scene {
             const hits = (this.lycheeVolleyHits.get(key) || 0) + 1;
             this.lycheeVolleyHits.set(key, hits);
             damage *= 1 + ((hits - 1) * 0.18);
+        }
+        if (boba.weaponType === 'matchaOrb') {
+            this.applyMatchaPoison(enemy, boba.baseDamage || damage);
+            this.healFromMatchaDamage(damage);
         }
         this.showDamageNumber(enemy.x, enemy.y, damage);
 
