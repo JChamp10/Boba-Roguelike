@@ -21,6 +21,7 @@ const GameState = {
     xp: 0,
     xpToLevel: 100,
     pendingLevelUps: 0,
+    pendingSpecialUpgrades: 0,
     selectedUpgrades: [],
     enemiesKilledThisRun: 0,
     health: 100,
@@ -33,6 +34,8 @@ const GameState = {
     selectedCharacter: 0,
     selectedDrink: 'classic',
     selectedGun: 'classic',
+    unlockedDrinks: { classic: true },
+    unlockedGuns: { classic: true },
     volume: 0.8,
     aimMode: 'auto',
 
@@ -44,6 +47,9 @@ const GameState = {
             this.level++;
             levelsGained++;
             this.pendingLevelUps++;
+            if (this.level % 5 === 0) {
+                this.pendingSpecialUpgrades++;
+            }
             this.xpToLevel = Math.floor(this.xpToLevel * 1.35);
         }
         return levelsGained;
@@ -56,6 +62,7 @@ const GameState = {
         this.xp = 0;
         this.xpToLevel = 100;
         this.pendingLevelUps = 0;
+        this.pendingSpecialUpgrades = 0;
         this.selectedUpgrades = [];
         this.enemiesKilledThisRun = 0;
         this.maxHealth = 100;

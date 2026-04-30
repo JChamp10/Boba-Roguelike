@@ -14,6 +14,8 @@ const IDLE_RUN_TAPIOCA_TICK_MS = 1000;
 const PER_RUN_DAMAGE_BOOST_PERCENT = 0.05;
 const LYCHEE_PROJECTILE_LIFESPAN_MS = 1200;
 const BUILD_ABILITY_DURATION_MS = 4200;
+const CHARACTER_UNLOCK_COST_STEP = 1000000;
+const GUN_UNLOCK_COST_STEP = 500000;
 
 // BUILD SETUP: swap the texture keys here after you add custom character/weapon assets.
 // For new files, add them to BOOT_IMAGE_ASSETS below, then point playerTexture/gunTexture/projectileTexture at the new keys.
@@ -149,6 +151,7 @@ const GUN_OPTIONS = [
         gunTexture: 'tiger_gun',
         projectileTexture: 'tiger_projectile',
         gunScale: 0.26,
+        gunFacesRight: true,
         projectileScale: 0.18,
         projectileSpeed: 520,
         projectileLifespan: 1700,
@@ -173,6 +176,50 @@ function getGunOption(id = GameState.selectedGun) {
 function sanitizeBuildState() {
     GameState.selectedDrink = getDrinkOption(GameState.selectedDrink).id;
     GameState.selectedGun = getGunOption(GameState.selectedGun).id;
+    GameState.unlockedDrinks = sanitizeBuildUnlockMap(GameState.unlockedDrinks, DRINK_OPTIONS);
+    GameState.unlockedGuns = sanitizeBuildUnlockMap(GameState.unlockedGuns, GUN_OPTIONS);
+}
+
+function sanitizeBuildUnlockMap(unlocks, options) {
+    const sanitized = { [options[0].id]: true };
+    const source = unlocks || {};
+    options.forEach(option => {
+        if (source[option.id]) sanitized[option.id] = true;
+    });
+    return sanitized;
+}
+
+function getBuildUnlockMap(type) {
+    return type === 'drink' ? GameState.unlockedDrinks : GameState.unlockedGuns;
+}
+
+function isBuildOptionUnlocked(type, id) {
+    return !!getBuildUnlockMap(type)?.[id];
+}
+
+function getBuildOptionUnlockCost(type, id) {
+    const options = type === 'drink' ? DRINK_OPTIONS : GUN_OPTIONS;
+    const index = Math.max(0, options.findIndex(option => option.id === id));
+    if (index === 0) return 0;
+    return index * (type === 'drink' ? CHARACTER_UNLOCK_COST_STEP : GUN_UNLOCK_COST_STEP);
+}
+
+function formatTapiocaCost(cost) {
+    if (cost >= 1000000) return `${(cost / 1000000).toFixed(cost % 1000000 === 0 ? 0 : 1)}M TP`;
+    if (cost >= 1000) return `${Math.floor(cost / 1000)}K TP`;
+    return `${cost} TP`;
+}
+
+function getSelectedBuildLock() {
+    const drink = getDrinkOption();
+    const gun = getGunOption();
+    if (!isBuildOptionUnlocked('drink', drink.id)) {
+        return { type: 'drink', option: drink, cost: getBuildOptionUnlockCost('drink', drink.id) };
+    }
+    if (!isBuildOptionUnlocked('gun', gun.id)) {
+        return { type: 'gun', option: gun, cost: getBuildOptionUnlockCost('gun', gun.id) };
+    }
+    return null;
 }
 
 function getSelectedBuildProfile() {
@@ -221,7 +268,7 @@ function getBuildSynergyText(drink = getDrinkOption(), gun = getGunOption()) {
 // ============================================
 const SaveManager = {
     STORAGE_KEY: 'boba_roguelike_save',
-    VERSION: 8,
+    VERSION: 9,
 
     save() {
         const data = {
@@ -234,6 +281,8 @@ const SaveManager = {
             aimMode: GameState.aimMode,
             selectedDrink: GameState.selectedDrink,
             selectedGun: GameState.selectedGun,
+            unlockedDrinks: GameState.unlockedDrinks,
+            unlockedGuns: GameState.unlockedGuns,
             idleMachines: GameState.idleMachines,
             idleFactoryTech: GameState.idleFactoryTech,
             evolutionBoost: GameState.evolutionBoost,
@@ -261,6 +310,8 @@ const SaveManager = {
             GameState.aimMode = data.aimMode === 'manual' ? 'manual' : 'auto';
             GameState.selectedDrink = data.selectedDrink || GameState.selectedDrink || 'classic';
             GameState.selectedGun = data.selectedGun || GameState.selectedGun || 'classic';
+            GameState.unlockedDrinks = this.sanitizeBuildUnlocks(data.unlockedDrinks, DRINK_OPTIONS);
+            GameState.unlockedGuns = this.sanitizeBuildUnlocks(data.unlockedGuns, GUN_OPTIONS);
             sanitizeBuildState();
             GameState.idleMachines = data.idleMachines || {};
             GameState.idleFactoryTech = data.idleFactoryTech || {};
@@ -275,7 +326,7 @@ const SaveManager = {
     },
 
     migrate(data) {
-        // Version 8 preserves progression and adds character build picks.
+        // Version 9 preserves progression, character build picks, and build unlocks.
         GameState.tapioca = data.tapioca || 0;
         GameState.totalTapioca = data.totalTapioca || 0;
         GameState.rage = data.rage || 0;
@@ -284,6 +335,8 @@ const SaveManager = {
         GameState.aimMode = data.aimMode === 'manual' ? 'manual' : 'auto';
         GameState.selectedDrink = data.selectedDrink || GameState.selectedDrink || 'classic';
         GameState.selectedGun = data.selectedGun || GameState.selectedGun || 'classic';
+        GameState.unlockedDrinks = this.sanitizeBuildUnlocks(data.unlockedDrinks, DRINK_OPTIONS);
+        GameState.unlockedGuns = this.sanitizeBuildUnlocks(data.unlockedGuns, GUN_OPTIONS);
         sanitizeBuildState();
         GameState.idleMachines = data.idleMachines || {};
         GameState.idleFactoryTech = data.idleFactoryTech || {};
@@ -306,6 +359,8 @@ const SaveManager = {
         GameState.aimMode = 'auto';
         GameState.selectedDrink = 'classic';
         GameState.selectedGun = 'classic';
+        GameState.unlockedDrinks = { classic: true };
+        GameState.unlockedGuns = { classic: true };
         GameState.idleMachines = {};
         GameState.idleFactoryTech = {};
         GameState.evolutionBoost = 0;
@@ -332,6 +387,10 @@ const SaveManager = {
             sanitized[id] = Math.max(0, level || 0);
         });
         return sanitized;
+    },
+
+    sanitizeBuildUnlocks(unlocks, options) {
+        return sanitizeBuildUnlockMap(unlocks, options);
     },
 
     applyOfflineIdleProgress(savedAt) {
@@ -436,6 +495,14 @@ const UPGRADES = [
     { id: 'bounce5', branch: 'bounce', tier: 5, name: 'Boba God', desc: 'Wall split can happen twice; first split keeps full damage', icon: 'B3', requires: ['bounce4'], apply: scene => { scene.wallSplitCount = 2; scene.wallFullDamageSplits = 1; } }
 ];
 
+const SPECIAL_UPGRADES = [
+    { id: 'specialInfiniteLoop', branch: 'special', tier: 5, name: 'Infinite Loop Core', desc: 'Each attack repeats one half-power pearl after a short delay.', icon: 'LOOP', apply: scene => { scene.infiniteLoopCore = true; } },
+    { id: 'specialPulseWave', branch: 'special', tier: 5, name: 'Pulse Wave Generator', desc: 'Shots emit a blue pulse for half damage and slow nearby enemies.', icon: 'WAVE', apply: scene => { scene.pulseWaveGenerator = true; } },
+    { id: 'specialRandomizedSpread', branch: 'special', tier: 5, name: 'Randomized Spread Core', desc: 'Double attack speed, but shots gain unpredictable spread.', icon: 'RNG', apply: scene => { scene.randomizedSpreadCore = true; scene.applyAttackSpeedBoost(1); } },
+    { id: 'specialBounceCascade', branch: 'special', tier: 5, name: 'Bounce Cascade Engine', desc: 'Piercing shots chain toward the next enemy after each hit.', icon: 'CHAIN', apply: scene => { scene.bounceCascadeEngine = true; } },
+    { id: 'specialOrbPet', branch: 'special', tier: 5, name: 'Dash Detonation Core', desc: 'Replaces dash explosions with a small pet that collects orbs.', icon: 'PET', apply: scene => { scene.orbPetEnabled = true; scene.createOrbPet(); } }
+];
+
 // UI THEME: these read the CSS variables in index.html, so colors are easy to retheme.
 function cssThemeColor(name, fallback) {
     const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -468,6 +535,7 @@ const BRANCH_VISUALS = {
     pierce: { accent: BOBA_THEME.taro, glow: 0x2b1543, label: 'TARO STRAW' },
     bounce: { accent: BOBA_THEME.caramel, glow: 0x422d08, label: 'CARAMEL RICOCHET' },
     shot: { accent: BOBA_THEME.lychee, glow: 0x3f1426, label: 'PEARL STORM' },
+    special: { accent: BOBA_THEME.aqua, glow: 0x0b2a44, label: 'GACHA CORE' },
     machine: { accent: BOBA_THEME.caramel, glow: 0x30200a, label: 'SHOP MACHINE' },
     boost: { accent: BOBA_THEME.cream, glow: 0x33240f, label: 'STAMP CARD' },
     runboost: { accent: BOBA_THEME.danger, glow: 0x3d080e, label: 'RUN BOOST' },
@@ -475,13 +543,13 @@ const BRANCH_VISUALS = {
 };
 
 const PERMA_STORE_VISUALS = {
-    menuSpeed: { theme: 'speed', tag: 'BOOST', icon: 'SPD', main: '+1%', sub: 'Speed per level' },
-    menuDamage: { theme: 'damage', tag: 'BOOST', icon: 'DMG', main: '+1%', sub: 'Damage per level' },
-    menuReload: { theme: 'speed', tag: 'BOOST', icon: 'RLD', main: '+1%', sub: 'Reload per level' },
-    menuHealth: { theme: 'health', tag: 'BOOST', icon: 'HP', main: '+1', sub: 'Max HP per level' },
+    menuSpeed: { theme: 'speed', tag: 'BOOST', icon: 'SPD', assetKey: 'perma_speed_1', main: '+1%', sub: 'Speed per level' },
+    menuDamage: { theme: 'damage', tag: 'BOOST', icon: 'DMG', assetKey: 'perma_damage_1', main: '+10%', sub: 'Damage per level' },
+    menuReload: { theme: 'speed', tag: 'BOOST', icon: 'RLD', assetKey: 'perma_reload_1', main: '+1%', sub: 'Reload per level' },
+    menuHealth: { theme: 'health', tag: 'BOOST', icon: 'HP', assetKey: 'perma_health_1', main: '+1', sub: 'Max HP per level' },
     menuAmmo: { theme: 'machine', tag: 'BOOST', icon: 'AMMO', main: '+1', sub: 'Ammo per level' },
     menuRageBonus: { theme: 'runboost', tag: 'RUN BOOST', icon: 'RAGE', main: '+2%', sub: 'Rage gain' },
-    menuRunDamage: { theme: 'damage', tag: 'RUN BOOST', icon: 'DMG', main: '+1%', sub: 'Run damage' },
+    menuRunDamage: { theme: 'damage', tag: 'RUN BOOST', icon: 'DMG', assetKey: 'temp_damage_5', main: '+5%', sub: 'Run damage' },
     menuXpBonus: { theme: 'speed', tag: 'RUN BOOST', icon: 'XP', main: '+5%', sub: 'XP gain' }
 };
 
@@ -531,6 +599,16 @@ function buildWeightedUpgradeChoices() {
         }
     }
 
+    return chosen;
+}
+
+function buildSpecialUpgradeChoices() {
+    const pool = SPECIAL_UPGRADES.filter(upgrade => !hasUpgrade(upgrade.id));
+    const chosen = [];
+    while (chosen.length < 3 && pool.length > 0) {
+        const index = Phaser.Math.Between(0, pool.length - 1);
+        chosen.push(pool.splice(index, 1)[0]);
+    }
     return chosen;
 }
 
@@ -800,6 +878,13 @@ function hardSwitchScene(scene, targetKey) {
 
 function startFreshRunFromMenu(scene) {
     sanitizeBuildState();
+    const locked = getSelectedBuildLock();
+    if (locked) {
+        if (typeof scene.showBuildLockedMessage === 'function') {
+            scene.showBuildLockedMessage(locked);
+        }
+        return;
+    }
     const selectedDrink = GameState.selectedDrink;
     const selectedGun = GameState.selectedGun;
     GameState.reset();
@@ -903,12 +988,14 @@ function createPermanentStoreCard(scene, x, y, upgrade, width, height) {
         align: 'center',
         wordWrap: { width: width - 18, useAdvancedWrap: true }
     }).setOrigin(0.5);
-    const icon = scene.add.text(0, top + 92, visual.icon, {
-        fontSize: visual.icon.length > 3 ? '20px' : '27px',
-        fill: '#fff7e6',
-        fontFamily: 'Arial Black',
-        align: 'center'
-    }).setOrigin(0.5);
+    const icon = visual.assetKey && scene.textures.exists(visual.assetKey)
+        ? scene.add.image(0, top + 94, visual.assetKey).setDisplaySize(56, 88)
+        : scene.add.text(0, top + 92, visual.icon, {
+            fontSize: visual.icon.length > 3 ? '20px' : '27px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black',
+            align: 'center'
+        }).setOrigin(0.5);
     const main = scene.add.text(0, top + 128, visual.main, {
         fontSize: '24px',
         fill: '#f6b84b',
@@ -992,7 +1079,12 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'upgrade-damage', path: 'assets/Boba_Upgrades/upgrade-damage.png' },
     { key: 'upgrade-health', path: 'assets/Boba_Upgrades/upgrade-health.png' },
     { key: 'upgrade-pierce', path: 'assets/Boba_Upgrades/upgrade-pierce.png' },
-    { key: 'upgrade-bounce', path: 'assets/Boba_Upgrades/upgrade-bounce.png' }
+    { key: 'upgrade-bounce', path: 'assets/Boba_Upgrades/upgrade-bounce.png' },
+    { key: 'perma_damage_1', path: 'assets/Perma and Temp Upgrades/Damage 1% permanant.png' },
+    { key: 'temp_damage_5', path: 'assets/Perma and Temp Upgrades/Damage 5% Temporary.png' },
+    { key: 'perma_health_1', path: 'assets/Perma and Temp Upgrades/Health 1% Permanant.png' },
+    { key: 'perma_reload_1', path: 'assets/Perma and Temp Upgrades/Reload Speed 1% permanant.png' },
+    { key: 'perma_speed_1', path: 'assets/Perma and Temp Upgrades/Speed 1% Permanant.png' }
 ];
 
 // ============================================
@@ -1635,8 +1727,22 @@ class MenuScene extends Phaser.Scene {
                 fill: '#9fb3d9',
                 align: 'center',
                 wordWrap: { width: 250 }
+            }).setOrigin(0.5),
+            lockText: this.add.text(x, y + 88, '', {
+                fontSize: '11px',
+                fill: '#ffd86f',
+                align: 'center',
+                fontFamily: 'Arial Black',
+                wordWrap: { width: 270 }
             }).setOrigin(0.5)
         };
+        wheel.buyBg = this.add.rectangle(x, y + 116, 146, 28, 0x3a2b12, 0.96)
+            .setStrokeStyle(2, BOBA_THEME.caramel, 0.95);
+        wheel.buyText = this.add.text(x, y + 116, '', {
+            fontSize: '11px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
 
         this.add.circle(x, y - 8, 62, BOBA_THEME.caramel, 0.10).setStrokeStyle(4, BOBA_THEME.caramel, 0.9);
         this.add.circle(x, y - 8, 50, 0x07121d, 0.9).setStrokeStyle(2, BOBA_THEME.aqua, 0.28);
@@ -1647,6 +1753,11 @@ class MenuScene extends Phaser.Scene {
         wheel.rightPreview.setDepth(2);
         wheel.nameText.setDepth(2);
         wheel.descText.setDepth(2);
+        wheel.lockText.setDepth(2);
+        wheel.buyBg.setDepth(2);
+        wheel.buyText.setDepth(2);
+        wheel.buyBg.setVisible(false).disableInteractive();
+        wheel.buyText.setVisible(false);
 
         const prev = this.add.text(x - 164, y - 6, '<', {
             fontSize: '32px',
@@ -1671,9 +1782,28 @@ class MenuScene extends Phaser.Scene {
             this.tweens.add({ targets: next, x: next.x + 5, yoyo: true, duration: 55 });
             this.rotateBuildWheel(type, 1);
         });
-        wheel.centerPreview.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.rotateBuildWheel(type, 1));
+        wheel.buyBg.on('pointerdown', () => this.buySelectedBuildOption(type));
 
         return wheel;
+    }
+
+    buySelectedBuildOption(type) {
+        const option = type === 'drink' ? getDrinkOption() : getGunOption();
+        if (isBuildOptionUnlocked(type, option.id)) return;
+        const cost = getBuildOptionUnlockCost(type, option.id);
+        if (GameState.tapioca < cost) {
+            this.showBuildLockedMessage?.({ type, option, cost });
+            return;
+        }
+        GameState.tapioca -= cost;
+        if (type === 'drink') {
+            GameState.unlockedDrinks[option.id] = true;
+        } else {
+            GameState.unlockedGuns[option.id] = true;
+        }
+        SaveManager.save();
+        this.showBuildLockedMessage?.({ type, option, cost: 0, unlocked: true });
+        this.updateDisplays();
     }
 
     rotateBuildWheel(type, direction) {
@@ -1715,8 +1845,20 @@ class MenuScene extends Phaser.Scene {
         applyPreview(wheel.leftPreview, prev, baseScale, 0.36);
         applyPreview(wheel.centerPreview, current, baseScale + 0.28, 1);
         applyPreview(wheel.rightPreview, next, baseScale, 0.36);
+        const locked = !isBuildOptionUnlocked(wheel.type, current.id);
+        const cost = getBuildOptionUnlockCost(wheel.type, current.id);
+        wheel.centerPreview.setAlpha(locked ? 0.42 : 1);
         wheel.nameText.setText(current.name.toUpperCase());
         wheel.descText.setText(current.desc);
+        wheel.lockText.setText(locked ? `LOCKED - ${formatTapiocaCost(cost)}` : '').setVisible(locked);
+        wheel.buyText.setText(`BUY ${formatTapiocaCost(cost)}`);
+        wheel.buyBg.setVisible(locked);
+        wheel.buyText.setVisible(locked);
+        if (locked) {
+            wheel.buyBg.setInteractive({ useHandCursor: true });
+        } else {
+            wheel.buyBg.disableInteractive();
+        }
     }
 
     createLeaderboardPanel(x, y) {
@@ -1809,10 +1951,15 @@ class MenuScene extends Phaser.Scene {
         if (!this.buildNameText) return;
         const drink = getDrinkOption();
         const gun = getGunOption();
+        const locked = getSelectedBuildLock();
         this.updateWheelPreview(this.drinkWheel);
         this.updateWheelPreview(this.gunWheel);
         this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
-        this.runHintText?.setText(getBuildSynergyText(drink, gun) || 'Open character select to match a boba and weapon for a synergy.');
+        this.runHintText?.setText(
+            locked
+                ? `${locked.option.name} locked - ${formatTapiocaCost(locked.cost)}`
+                : (getBuildSynergyText(drink, gun) || 'Open character select to match a boba and weapon for a synergy.')
+        );
         if (this.buildCharacterPreview) {
             const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
             this.buildCharacterPreview
@@ -1831,6 +1978,14 @@ class MenuScene extends Phaser.Scene {
             const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
             this.charPreview.setTexture(drink.playerTexture).setOrigin(drinkOrigin.x, drinkOrigin.y).setScale(drink.playerScale * 1.72);
         }
+    }
+
+    showBuildLockedMessage(locked) {
+        if (!this.runHintText || !locked) return;
+        const message = locked.unlocked
+            ? `${locked.option.name} unlocked.`
+            : `${locked.option.name} costs ${formatTapiocaCost(locked.cost)}.`;
+        this.runHintText.setText(message);
     }
 
     makeButton(x, y, text, callback, accent = 0x7ed2ff, fill = 0x122438, width = 170) {
@@ -1961,6 +2116,18 @@ class BuildSelectScene extends Phaser.Scene {
         return MenuScene.prototype.updateWheelPreview.call(this, wheel);
     }
 
+    buySelectedBuildOption(type) {
+        return MenuScene.prototype.buySelectedBuildOption.call(this, type);
+    }
+
+    showBuildLockedMessage(locked) {
+        if (!this.abilityText || !locked) return;
+        const message = locked.unlocked
+            ? `${locked.option.name.toUpperCase()} UNLOCKED`
+            : `${locked.option.name.toUpperCase()}\n${formatTapiocaCost(locked.cost)} REQUIRED`;
+        this.abilityText.setText(message);
+    }
+
     updateDisplays() {
         this.updateBuildPreview();
     }
@@ -1974,12 +2141,15 @@ class BuildSelectScene extends Phaser.Scene {
         this.updateWheelPreview(this.drinkWheel);
         this.updateWheelPreview(this.gunWheel);
         this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
+        const locked = getSelectedBuildLock();
         const synergy = getBuildSynergyText(drink, gun);
         this.synergyTitleText?.setVisible(!!synergy);
         this.runHintText
             .setVisible(!!synergy)
             .setText(synergy);
-        this.abilityText.setText(`SPACE ABILITY\n${drink.desc}`);
+        this.abilityText.setText(locked
+            ? `${locked.option.name.toUpperCase()}\nLOCKED - ${formatTapiocaCost(locked.cost)}`
+            : `SPACE ABILITY\n${drink.desc}`);
         this.statsText.setText(`SPEED ${char.speed}\nDAMAGE ${char.damage}\nFIRE RATE ${char.fireRate}ms\n${char.desc}`);
 
         const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
@@ -2620,6 +2790,12 @@ class GameScene extends Phaser.Scene {
         this.ammoDamageRamp = false;
         this.xpSpeedBoostEnabled = false;
         this.xpSpeedBoostUntil = 0;
+        this.infiniteLoopCore = false;
+        this.pulseWaveGenerator = false;
+        this.randomizedSpreadCore = false;
+        this.bounceCascadeEngine = false;
+        this.orbPetEnabled = false;
+        this.orbPet = null;
         this.damageReductionPercent = 0;
         this.periodicFullBlock = false;
         this.nextFullBlockAt = 0;
@@ -2883,6 +3059,7 @@ class GameScene extends Phaser.Scene {
         this.updateFactoryVisual(time);
         this.updateXpPickups();
         this.updateHealingPickups();
+        this.updateOrbPet();
         this.validateProjectiles();
         this.validateEnemyProjectiles();
 
@@ -3392,6 +3569,50 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    createOrbPet() {
+        if (this.orbPet?.active || !this.player?.active) return;
+        this.orbPet = this.add.image(this.player.x - 34, this.player.y + 24, 'projectile_boba')
+            .setScale(0.13)
+            .setTint(0x7ed2ff)
+            .setDepth(4);
+    }
+
+    updateOrbPet() {
+        if (!this.orbPetEnabled || !this.player?.active) return;
+        if (!this.orbPet?.active) {
+            this.createOrbPet();
+            return;
+        }
+        const pickups = [
+            ...(this.xpPickups?.children.entries || []).map(pickup => ({ pickup, type: 'xp' })),
+            ...(this.healingPickups?.children.entries || []).map(pickup => ({ pickup, type: 'heal' }))
+        ].filter(entry => entry.pickup.active);
+        let target = null;
+        let nearestDist = Infinity;
+        pickups.forEach(entry => {
+            const dist = Phaser.Math.Distance.Between(this.orbPet.x, this.orbPet.y, entry.pickup.x, entry.pickup.y);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                target = entry;
+            }
+        });
+        const follow = target && nearestDist < 360
+            ? target.pickup
+            : { x: this.player.x - 42, y: this.player.y + 28 };
+        const angle = Phaser.Math.Angle.Between(this.orbPet.x, this.orbPet.y, follow.x, follow.y);
+        const speed = target ? 12 : 7;
+        this.orbPet.x += Math.cos(angle) * Math.min(speed, Phaser.Math.Distance.Between(this.orbPet.x, this.orbPet.y, follow.x, follow.y));
+        this.orbPet.y += Math.sin(angle) * Math.min(speed, Phaser.Math.Distance.Between(this.orbPet.x, this.orbPet.y, follow.x, follow.y));
+        this.orbPet.rotation += 0.08;
+        if (target && Phaser.Math.Distance.Between(this.orbPet.x, this.orbPet.y, target.pickup.x, target.pickup.y) < 22) {
+            if (target.type === 'xp') {
+                this.collectXpPickup(this.player, target.pickup);
+            } else {
+                this.collectHealingPickup(this.player, target.pickup);
+            }
+        }
+    }
+
     collectHealingPickup(player, pickup) {
         if (!pickup.active) return;
         const amount = pickup.healAmount || HEALING_ORB_HEAL_AMOUNT;
@@ -3415,8 +3636,9 @@ class GameScene extends Phaser.Scene {
 
     maybeLaunchLevelUpgrade() {
         if (GameState.pendingLevelUps <= 0 || GameState.upgradeSceneActive) return;
-        if (buildWeightedUpgradeChoices().length === 0) {
+        if (buildWeightedUpgradeChoices().length === 0 && buildSpecialUpgradeChoices().length === 0) {
             GameState.pendingLevelUps = 0;
+            GameState.pendingSpecialUpgrades = 0;
             return;
         }
         this.setCombatMouseLocked(false);
@@ -3455,12 +3677,14 @@ class GameScene extends Phaser.Scene {
         if (this.weaponType === 'tigerBlade') {
             const facingLeft = aimPoint.x < pivot.x;
             this.gunSprite.setOrigin(0.78, 0.5);
+            this.gunSprite.setFlipX(true);
             this.gunSprite.setFlipY(facingLeft);
             this.gunSprite.setRotation(aimAngle);
             this.player.setRotation(0);
             return;
         }
         const gunFacesRight = !!this.weaponProfile?.gunFacesRight;
+        this.gunSprite.setFlipX(false);
         this.gunSprite.setFlipY(gunFacesRight ? aimPoint.x < pivot.x : aimPoint.x > pivot.x);
         this.gunSprite.setRotation(aimAngle + (gunFacesRight ? 0 : Math.PI));
         this.player.setRotation(0);
@@ -3652,21 +3876,34 @@ class GameScene extends Phaser.Scene {
         if (this.time.now < this.accuracyBoostUntil) {
             spread *= 0.35;
         }
+        if (this.randomizedSpreadCore) {
+            spread *= 1.9;
+        }
         const damageBoost = this.time.now < (this.tigerDamageBoostUntil || 0) ? 2 : 1;
         const projectileDamage = this.playerDamage * this.getAmmoDamageMultiplier() * damageBoost;
         const volleyId = ++this.shotVolleyId;
 
         // Fire shotgun/multishot pearls evenly from the same gun muzzle point.
         if (projectileCount === 1) {
-            fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle, projectileDamage, 0, 'gun', volleyId);
+            const shotAngle = this.randomizedSpreadCore
+                ? baseAngle + Phaser.Math.FloatBetween(-spread * 0.5, spread * 0.5)
+                : baseAngle;
+            fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, shotAngle, projectileDamage, 0, 'gun', volleyId);
         } else {
             for (let i = 0; i < projectileCount; i++) {
-                const spreadAngle = ((i / (projectileCount - 1)) - 0.5) * spread;
+                const randomSpread = this.randomizedSpreadCore ? Phaser.Math.FloatBetween(-spread * 0.35, spread * 0.35) : 0;
+                const spreadAngle = (((i / (projectileCount - 1)) - 0.5) * spread) + randomSpread;
                 fired = !!this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle + spreadAngle, projectileDamage, 0, 'gun', volleyId) || fired;
             }
         }
 
         if (!fired) return false;
+        if (this.infiniteLoopCore) {
+            this.fireInfiniteLoopShot(baseAngle, projectileDamage, volleyId);
+        }
+        if (this.pulseWaveGenerator) {
+            this.createPulseWave(muzzle.x, muzzle.y, projectileDamage * 0.5);
+        }
         if (this.weaponType === 'tigerBlade') {
             this.createTigerSlash(baseAngle, projectileDamage * 0.9, true, 132);
         }
@@ -3684,6 +3921,7 @@ class GameScene extends Phaser.Scene {
         const slash = this.add.image(pivot.x, pivot.y, this.gunTextureKey || 'tiger_gun')
             .setOrigin(0.78, 0.5)
             .setScale((this.weaponProfile?.gunScale || 0.26) * 1.28)
+            .setFlipX(true)
             .setFlipY(facingLeft)
             .setRotation(swingStart)
             .setAlpha(0.86)
@@ -3716,6 +3954,45 @@ class GameScene extends Phaser.Scene {
         if (enemy.hp <= 0) {
             this.killEnemyFromAbility(enemy);
         }
+    }
+
+    fireInfiniteLoopShot(angle, damage, volleyId) {
+        this.time.delayedCall(115, () => {
+            if (this.playerDown || this.runEnded) return;
+            const muzzle = this.getMuzzleFromAim(angle);
+            const boba = this.createPlayerBoba(muzzle.x, muzzle.y, angle, damage * 0.5, 0, 'gun', volleyId);
+            if (!boba) return;
+            boba.setScale(this.projectileScale * 0.5);
+            boba.baseScale = this.projectileScale * 0.5;
+            boba.body.velocity.scale(0.5);
+            boba.setAlpha(0.78);
+            boba.setTint(0x9dfff2);
+        });
+    }
+
+    createPulseWave(x, y, damage) {
+        const radius = 118;
+        const pulse = this.add.circle(x, y, 24, BOBA_THEME.aqua, 0.16)
+            .setStrokeStyle(4, BOBA_THEME.aqua, 0.72)
+            .setDepth(3);
+        this.tweens.add({
+            targets: pulse,
+            radius,
+            alpha: 0,
+            duration: 260,
+            ease: 'Sine.easeOut',
+            onComplete: () => pulse.destroy()
+        });
+        this.enemies?.children.entries.forEach(enemy => {
+            if (!enemy.active) return;
+            const dist = Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y);
+            if (dist > radius) return;
+            enemy.body.velocity.scale(0.45);
+            enemy.nextAttackAt = Math.max(enemy.nextAttackAt || 0, this.time.now + 320);
+            enemy.setTint(0x58ddff);
+            this.time.delayedCall(180, () => { if (enemy.active) enemy.clearTint(); });
+            this.damageEnemyFromAbility(enemy, damage, '#7ed2ff');
+        });
     }
 
     createPlayerBoba(spawnX, spawnY, angle, damage = this.playerDamage, splitDepth = 0, source = 'gun', volleyId = 0) {
@@ -3871,6 +4148,21 @@ class GameScene extends Phaser.Scene {
         return nearestDist <= maxDistance ? nearest : null;
     }
 
+    findNearestUnhitEnemy(x, y, hitEnemyIds = new Set(), maxDistance = Infinity) {
+        let nearest = null;
+        let nearestDist = Infinity;
+        this.enemies.children.entries.forEach(enemy => {
+            if (!enemy.active) return;
+            if (hitEnemyIds?.has(enemy.enemyId)) return;
+            const dist = Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearest = enemy;
+            }
+        });
+        return nearestDist <= maxDistance ? nearest : null;
+    }
+
     updateBobaDisplay() {
         if (this.playerDown) {
             this.bobaCountText.setText('DOWN');
@@ -3999,11 +4291,21 @@ class GameScene extends Phaser.Scene {
         }
         this.showDamageNumber(enemy.x, enemy.y, damage);
 
-        if ((boba.pierceRemaining || 0) > 0) {
+        const hadPierce = (boba.pierceRemaining || 0) > 0;
+        if (hadPierce) {
             boba.pierceRemaining--;
             boba.pierceHits = (boba.pierceHits || 0) + 1;
         } else {
             boba.destroy();
+        }
+        if (this.bounceCascadeEngine && boba.active && hadPierce) {
+            const nextEnemy = this.findNearestUnhitEnemy(boba.x, boba.y, boba.hitEnemyIds, 520);
+            if (nextEnemy) {
+                const chainAngle = Phaser.Math.Angle.Between(boba.x, boba.y, nextEnemy.x, nextEnemy.y);
+                boba.body.velocity.set(Math.cos(chainAngle) * this.projectileSpeed, Math.sin(chainAngle) * this.projectileSpeed);
+                boba.setTint(0x7ed2ff);
+                this.time.delayedCall(120, () => { if (boba.active) boba.clearTint(); });
+            }
         }
         enemy.hp -= damage;
 
@@ -4388,7 +4690,13 @@ class UpgradeScene extends Phaser.Scene {
 
         this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x04060d, 0.94).setInteractive();
 
-        this.chosenUpgrades = buildWeightedUpgradeChoices();
+        this.isSpecialDraft = (GameState.pendingSpecialUpgrades || 0) > 0;
+        this.chosenUpgrades = this.isSpecialDraft ? buildSpecialUpgradeChoices() : buildWeightedUpgradeChoices();
+        if (this.isSpecialDraft && this.chosenUpgrades.length === 0) {
+            GameState.pendingSpecialUpgrades = 0;
+            this.isSpecialDraft = false;
+            this.chosenUpgrades = buildWeightedUpgradeChoices();
+        }
         if (this.chosenUpgrades.length === 0) {
             GameState.pendingLevelUps = 0;
             resumeGameSceneFromOverlay(this);
@@ -4397,14 +4705,14 @@ class UpgradeScene extends Phaser.Scene {
         }
 
         this.cards = [];
-        this.add.text(GAME_CENTER_X, 142, 'PICK A BOBA MOD', {
+        this.add.text(GAME_CENTER_X, 142, this.isSpecialDraft ? 'PICK A GACHA CORE' : 'PICK A BOBA MOD', {
             fontSize: '34px',
             fill: '#fff4d6',
             fontFamily: 'Arial Black',
             stroke: '#4c2d5e',
             strokeThickness: 4
         }).setOrigin(0.5);
-        this.add.text(GAME_CENTER_X, 178, 'Choose one upgrade to keep the run rolling.', {
+        this.add.text(GAME_CENTER_X, 178, this.isSpecialDraft ? 'Every 5 levels, choose one rare core.' : 'Choose one upgrade to keep the run rolling.', {
             fontSize: '13px',
             fill: '#b8eaff',
             fontFamily: 'Courier New'
@@ -4494,6 +4802,9 @@ class UpgradeScene extends Phaser.Scene {
         GameState.selectedUpgrades.push(upgrade.id);
 
         GameState.pendingLevelUps--;
+        if (this.isSpecialDraft) {
+            GameState.pendingSpecialUpgrades = Math.max(0, (GameState.pendingSpecialUpgrades || 0) - 1);
+        }
 
         if (GameState.pendingLevelUps > 0) {
             GameState.upgradeSceneActive = true;
