@@ -93,7 +93,6 @@ const GUN_OPTIONS = [
         gunTexture: 'strawberry_gun',
         projectileTexture: 'strawberry_projectile',
         gunScale: 0.17,
-        gunFacesRight: true,
         projectileScale: 0.16,
         projectileSpeed: 500,
         projectileLifespan: 850,
@@ -112,7 +111,6 @@ const GUN_OPTIONS = [
         gunTexture: 'matcha_gun',
         projectileTexture: 'matcha_projectile',
         gunScale: 0.105,
-        gunFacesRight: true,
         projectileScale: 0.24,
         projectileSpeed: 260,
         projectileLifespan: 4300,
@@ -149,7 +147,6 @@ const GUN_OPTIONS = [
         gunTexture: 'tiger_gun',
         projectileTexture: 'tiger_projectile',
         gunScale: 0.2,
-        gunFacesRight: true,
         projectileScale: 0.18,
         projectileSpeed: 520,
         projectileLifespan: 1700,
@@ -1664,10 +1661,8 @@ class MenuScene extends Phaser.Scene {
         const nextIndex = Phaser.Math.Wrap(currentIndex + direction, 0, options.length);
         if (type === 'drink') {
             GameState.selectedDrink = options[nextIndex].id;
-            GameState.selectedGun = GUN_OPTIONS[nextIndex % GUN_OPTIONS.length].id;
         } else {
             GameState.selectedGun = options[nextIndex].id;
-            GameState.selectedDrink = DRINK_OPTIONS[nextIndex % DRINK_OPTIONS.length].id;
         }
         sanitizeBuildState();
         SaveManager.save();
@@ -1860,7 +1855,7 @@ class BuildSelectScene extends Phaser.Scene {
             stroke: '#7a4f15',
             strokeThickness: 4
         }).setOrigin(0.5);
-        this.add.text(GAME_CENTER_X, 98, 'Pick a boba body and weapon. Builds are paired so the kit stays readable.', {
+        this.add.text(GAME_CENTER_X, 98, 'Pick any boba body and any weapon. Mix builds to find weird combos.', {
             fontSize: '13px',
             fill: '#baf4ff',
             fontFamily: 'Courier New'
@@ -2775,9 +2770,15 @@ class GameScene extends Phaser.Scene {
         this.gunSprite.setDepth(3);
 
         this.maxBobaCount = 5 + this.permaMaxAmmoBonus;
+        if (this.weaponType === 'strawberryShotgun') {
+            this.maxBobaCount = 1;
+        }
         this.bobaCount = this.maxBobaCount;
         this.isReloading = false;
         this.reloadDuration = Math.max(250, Math.floor(1000 / (1 + this.permaReloadSpeedBonus)));
+        if (this.weaponType === 'tigerBlade') {
+            this.reloadDuration *= 2;
+        }
     }
 
     createHud() {
@@ -2793,6 +2794,8 @@ class GameScene extends Phaser.Scene {
         this.tcText = this.add.text(18, 158, '', { fontSize: '14px', fill: '#38d9ff' }).setOrigin(0, 0.5);
         this.outputText = this.add.text(18, 178, '', { fontSize: '13px', fill: '#f6b84b' }).setOrigin(0, 0.5);
         this.dashText = this.add.text(18, 198, '', { fontSize: '13px', fill: '#7cff8a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.abilityBarBg = this.add.rectangle(18, 216, 156, 8, 0x1f2b3d, 0.92).setOrigin(0, 0.5).setStrokeStyle(1, 0x7ed2ff, 0.5);
+        this.abilityBarFill = this.add.rectangle(18, 216, 156, 8, 0x7cff8a, 0.95).setOrigin(0, 0.5);
 
         this.healthBarBg = this.add.image(100, 30, 'health_bg').setOrigin(0, 0.5);
         this.healthBarFill = this.add.image(100, 30, 'health_fill').setOrigin(0, 0.5);
@@ -2816,7 +2819,7 @@ class GameScene extends Phaser.Scene {
 
         [
             this.bobaCountText, this.reloadText, this.playerStateText, this.rageText, this.tcText,
-            this.outputText, this.dashText, this.healthBarBg, this.healthBarFill, this.healthText,
+            this.outputText, this.dashText, this.abilityBarBg, this.abilityBarFill, this.healthBarBg, this.healthBarFill, this.healthText,
             this.xpBarBg, this.xpBarFill, this.xpText, this.waveText, this.scoreText,
             this.levelText, this.factoryStatusText
         ].forEach(node => node?.setDepth?.(5));
@@ -2884,6 +2887,7 @@ class GameScene extends Phaser.Scene {
         });
 
         this.updateEnemies(time);
+        this.updateAbilityCooldownHud();
     }
 
     validateProjectiles() {
@@ -3011,15 +3015,22 @@ class GameScene extends Phaser.Scene {
             });
             this.createAbilityPulse(0x8ee8ff, 112);
         } else if (this.buildAbilityType === 'tigerFocus') {
-            this.createAbilityPulse(0xffb14f, 132);
-            this.player.setTint(0xffd36a);
-            this.time.delayedCall(BUILD_ABILITY_DURATION_MS, () => {
-                if (!this.playerDown && this.player?.active) {
-                    this.player.clearTint();
-                }
-            });
+            this.performTigerBladeFlurry();
         }
         this.updateUI();
+    }
+
+    performTigerBladeFlurry() {
+        const slashDamage = this.playerDamage * 2;
+        for (let i = 0; i < 5; i++) {
+            this.time.delayedCall(i * 65, () => {
+                if (this.playerDown || this.runEnded) return;
+                const aimPoint = this.getCurrentAimPoint() || this.getVisualAimPoint();
+                const pivot = this.getGunPivot();
+                const angle = Phaser.Math.Angle.Between(pivot.x, pivot.y, aimPoint.x, aimPoint.y);
+                this.createTigerSlash(angle, slashDamage, true, 118);
+            });
+        }
     }
 
     createAbilityPulse(color, radius) {
@@ -3608,23 +3619,22 @@ class GameScene extends Phaser.Scene {
 
         if (!fired) return false;
         if (this.weaponType === 'tigerBlade') {
-            this.createTigerSlash(baseAngle, projectileDamage * 2, this.time.now < this.abilityActiveUntil);
+            this.createTigerSlash(baseAngle, projectileDamage * 0.9, true, 92);
         }
         this.bobaCount--;
         this.updateBobaDisplay();
         return true;
     }
 
-    createTigerSlash(angle, damage, canDamage) {
+    createTigerSlash(angle, damage, canDamage = true, radius = 92) {
         const pivot = this.getGunPivot();
-        const radius = 92;
         const arcWidth = 0.72;
         const slash = this.add.graphics().setDepth(4);
-        slash.lineStyle(canDamage ? 10 : 7, canDamage ? 0xffd36a : 0xff9f3d, canDamage ? 0.86 : 0.5);
+        slash.lineStyle(10, 0xffd36a, 0.9);
         slash.beginPath();
         slash.arc(pivot.x, pivot.y, radius, angle - arcWidth, angle + arcWidth, false);
         slash.strokePath();
-        slash.lineStyle(3, 0xffffff, canDamage ? 0.75 : 0.35);
+        slash.lineStyle(3, 0xffffff, 0.72);
         slash.beginPath();
         slash.arc(pivot.x, pivot.y, radius - 16, angle - arcWidth * 0.7, angle + arcWidth * 0.7, false);
         slash.strokePath();
@@ -3832,6 +3842,30 @@ class GameScene extends Phaser.Scene {
             this.reloadText.setVisible(false);
             this.updateBobaDisplay();
         });
+    }
+
+    updateAbilityCooldownHud() {
+        if (!this.dashText || !this.abilityBarFill) return;
+        let abilityFillPct = 1;
+        if (this.buildAbilityType === 'classicDash') {
+            const dashCooldown = this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt > 0
+                ? ` ${Math.max(0, Math.ceil((this.nextDashRechargeAt - this.time.now) / 1000))}s`
+                : '';
+            this.dashText.setText(`SPACE DASH: ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
+            abilityFillPct = this.dashCharges > 0
+                ? 1
+                : Phaser.Math.Clamp(1 - ((this.nextDashRechargeAt - this.time.now) / this.dashRechargeDelay), 0, 1);
+        } else {
+            const abilityCooldown = this.time.now < this.nextAbilityAt
+                ? ` ${Math.max(0, Math.ceil((this.nextAbilityAt - this.time.now) / 1000))}s`
+                : ' READY';
+            this.dashText.setText(`SPACE: ${abilityCooldown}`);
+            abilityFillPct = this.time.now >= this.nextAbilityAt
+                ? 1
+                : Phaser.Math.Clamp(1 - ((this.nextAbilityAt - this.time.now) / this.abilityCooldownMs), 0, 1);
+        }
+        this.abilityBarFill.displayWidth = 156 * abilityFillPct;
+        this.abilityBarFill.setFillStyle(abilityFillPct >= 1 ? 0x7cff8a : 0xffd36a, 0.95);
     }
 
     spawnEnemy() {
@@ -4278,17 +4312,7 @@ class GameScene extends Phaser.Scene {
         this.rageText.setText(`RAGE: ${Math.floor(GameState.rage)} (+${getRagePerKill(this)}/kill)`);
         this.tcText.setText(`TC: ${Math.floor(GameState.tc)} (+${getTcPerKill()}/kill)`);
         this.outputText.setText(`RUN: +${Math.floor(GameState.runTcEarned)} TC  +${Math.floor(GameState.runTapiocaEarned)} TP`);
-        if (this.buildAbilityType === 'classicDash') {
-            const dashCooldown = this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt > 0
-                ? ` ${Math.max(0, Math.ceil((this.nextDashRechargeAt - this.time.now) / 1000))}s`
-                : '';
-            this.dashText.setText(`SPACE DASH: ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
-        } else {
-            const abilityCooldown = this.time.now < this.nextAbilityAt
-                ? ` ${Math.max(0, Math.ceil((this.nextAbilityAt - this.time.now) / 1000))}s`
-                : ' READY';
-            this.dashText.setText(`SPACE: ${abilityCooldown}`);
-        }
+        this.updateAbilityCooldownHud();
 
         this.waveText.setText(`WAVE ${GameState.wave}`);
         this.scoreText.setText(`SCORE: ${GameState.score}`);
