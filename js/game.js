@@ -126,8 +126,8 @@ const GUN_OPTIONS = [
         id: 'lychee-shotgun',
         name: 'Lychee Shotgun',
         desc: 'Tight fast pellets with high burst damage',
-        gunTexture: 'lychee_shotgun',
-        projectileTexture: 'lychee_projectile',
+        gunTexture: 'lychee_shotgun_ui',
+        projectileTexture: 'lychee_projectile_ui',
         gunScale: 0.0825,
         projectileScale: 0.035,
         projectileSpeed: 540,
@@ -1034,7 +1034,7 @@ class BootScene extends Phaser.Scene {
     finishBoot() {
         // All file-based images are ready, now generate procedural textures
         this.createTextures();
-        this.createCroppedLycheeTexture();
+        this.createLycheeUiTextures();
         this.anims.create({
             key: 'enemy_run',
             frames: [
@@ -1083,15 +1083,46 @@ class BootScene extends Phaser.Scene {
         }
     }
 
-    createCroppedLycheeTexture() {
-        if (this.textures.exists('lychee_player_ui') || !this.textures.exists('lychee_player')) return;
-        const source = this.textures.get('lychee_player').getSourceImage();
+    createLycheeUiTextures() {
+        this.createCleanImageTexture('lychee_player', 'lychee_player_ui', {
+            crop: { x: 520, y: 240, width: 500, height: 520 },
+            removeMode: 'black'
+        });
+        this.createCleanImageTexture('lychee_shotgun', 'lychee_shotgun_ui', {
+            crop: { x: 230, y: 70, width: 760, height: 300 },
+            removeMode: 'black'
+        });
+        this.createCleanImageTexture('lychee_projectile', 'lychee_projectile_ui', {
+            crop: { x: 130, y: 320, width: 850, height: 470 },
+            removeMode: 'neutral'
+        });
+    }
+
+    createCleanImageTexture(sourceKey, targetKey, options = {}) {
+        if (this.textures.exists(targetKey) || !this.textures.exists(sourceKey)) return;
+        const source = this.textures.get(sourceKey).getSourceImage();
         if (!source) return;
-        const crop = { x: 154, y: 150, width: 270, height: 330 };
-        const texture = this.textures.createCanvas('lychee_player_ui', crop.width, crop.height);
+        const crop = options.crop || { x: 0, y: 0, width: source.width, height: source.height };
+        const texture = this.textures.createCanvas(targetKey, crop.width, crop.height);
         const context = texture.getContext();
         context.clearRect(0, 0, crop.width, crop.height);
         context.drawImage(source, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+
+        const imageData = context.getImageData(0, 0, crop.width, crop.height);
+        const pixels = imageData.data;
+        for (let i = 0; i < pixels.length; i += 4) {
+            const r = pixels[i];
+            const g = pixels[i + 1];
+            const b = pixels[i + 2];
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const isBlackBg = options.removeMode === 'black' && max < 18;
+            const isNeutralBg = options.removeMode === 'neutral' && (max - min) < 36 && r < 205 && g < 205 && b < 205;
+            if (isBlackBg || isNeutralBg) {
+                pixels[i + 3] = 0;
+            }
+        }
+        context.putImageData(imageData, 0, 0);
         texture.refresh();
     }
 
