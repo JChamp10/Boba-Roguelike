@@ -1420,25 +1420,31 @@ class MenuScene extends Phaser.Scene {
             lineSpacing: 5
         }).setOrigin(0.5);
 
-        this.add.text(600, 246, 'CHARACTER BUILD', {
+        this.add.text(600, 246, 'CURRENT BUILD', {
             fontSize: '18px',
             fill: '#ffe7aa',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
-        this.buildNameText = this.add.text(600, 294, '', {
+        this.buildNameText = this.add.text(600, 304, '', {
             fontSize: '14px',
             fill: '#fff4d6',
             align: 'center',
-            fontFamily: 'Arial Black'
+            fontFamily: 'Arial Black',
+            wordWrap: { width: 290 }
         }).setOrigin(0.5);
-        this.createBuildSelector();
-        this.runHintText = this.add.text(600, 608, 'Use the wheels to pick a character and weapon.', {
+        this.buildCharacterPreview = this.add.image(534, 410, 'player_boba').setDepth(2);
+        this.buildGunPreview = this.add.image(676, 410, 'boba_gun').setDepth(2);
+        this.add.rectangle(600, 410, 248, 154, 0x07121d, 0.78).setStrokeStyle(2, BOBA_THEME.aqua, 0.45);
+        this.runHintText = this.add.text(600, 536, 'Open character select to change your boba and weapon.', {
             fontSize: '11px',
             fill: '#c2cbda',
             align: 'center',
-            wordWrap: { width: 330 },
+            wordWrap: { width: 285 },
             lineSpacing: 4
         }).setOrigin(0.5);
+        this.makeButton(600, 598, 'CHARACTER SELECT', () => {
+            this.scene.start('BuildSelectScene');
+        }, 0xffd86f, 0x3a2b12, 236);
 
         this.createLeaderboardPanel(940, 414);
 
@@ -1682,7 +1688,12 @@ class MenuScene extends Phaser.Scene {
             const origin = wheel.type === 'drink'
                 ? (option.playerOrigin || { x: 0.5, y: 0.5 })
                 : { x: 0.5, y: 0.5 };
-            image.setTexture(option[textureProp]).setOrigin(origin.x, origin.y).setScale(option[scaleProp] * scale).setAlpha(alpha);
+            image
+                .setTexture(option[textureProp])
+                .setOrigin(origin.x, origin.y)
+                .setScale(option[scaleProp] * scale)
+                .setAlpha(alpha)
+                .setFlipX(wheel.type === 'gun' && !!option.gunFacesRight);
         };
         applyPreview(wheel.leftPreview, prev, baseScale, 0.36);
         applyPreview(wheel.centerPreview, current, baseScale + 0.28, 1);
@@ -1785,6 +1796,20 @@ class MenuScene extends Phaser.Scene {
         this.updateWheelPreview(this.gunWheel);
         this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
         this.runHintText?.setText(gun.synergy || 'Use the wheels to pick a character and weapon.');
+        if (this.buildCharacterPreview) {
+            const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
+            this.buildCharacterPreview
+                .setTexture(drink.playerTexture)
+                .setOrigin(drinkOrigin.x, drinkOrigin.y)
+                .setScale(drink.playerScale * 2.1);
+        }
+        if (this.buildGunPreview) {
+            this.buildGunPreview
+                .setTexture(gun.gunTexture)
+                .setOrigin(0.5)
+                .setScale(gun.gunScale * 1.95)
+                .setFlipX(!!gun.gunFacesRight);
+        }
         if (this.charPreview) {
             const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
             this.charPreview.setTexture(drink.playerTexture).setOrigin(drinkOrigin.x, drinkOrigin.y).setScale(drink.playerScale * 1.72);
@@ -1812,6 +1837,144 @@ class MenuScene extends Phaser.Scene {
         });
 
         return btn;
+    }
+}
+
+// ============================================
+// BUILD SELECT SCENE
+// ============================================
+class BuildSelectScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'BuildSelectScene' });
+    }
+
+    create() {
+        resetRunUiState(this);
+        SaveManager.load();
+        MenuScene.prototype.createMenuBackdrop.call(this);
+
+        this.add.text(GAME_CENTER_X, 58, 'CHARACTER SELECT', {
+            fontSize: '42px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#7a4f15',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+        this.add.text(GAME_CENTER_X, 98, 'Pick a boba body and weapon. Builds are paired so the kit stays readable.', {
+            fontSize: '13px',
+            fill: '#baf4ff',
+            fontFamily: 'Courier New'
+        }).setOrigin(0.5);
+
+        createNeonPanel(this, 202, 418, 250, 470, BRANCH_VISUALS.health, 0.93);
+        createNeonPanel(this, 600, 418, 470, 470, BRANCH_VISUALS.speed, 0.94);
+        createNeonPanel(this, 998, 418, 250, 470, BRANCH_VISUALS.pierce, 0.93);
+
+        this.add.text(202, 206, 'PREVIEW', {
+            fontSize: '18px',
+            fill: '#74c174',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        this.previewCharacter = this.add.image(154, 344, 'player_boba').setDepth(2);
+        this.previewGun = this.add.image(250, 344, 'boba_gun').setDepth(2);
+        this.add.rectangle(202, 344, 190, 190, 0x06140f, 0.75).setStrokeStyle(2, BOBA_THEME.matcha, 0.42);
+        this.statsText = this.add.text(202, 510, '', {
+            fontSize: '13px',
+            fill: '#d9ffee',
+            align: 'center',
+            lineSpacing: 8,
+            wordWrap: { width: 210 }
+        }).setOrigin(0.5);
+
+        this.add.text(600, 178, 'BUILD WHEELS', {
+            fontSize: '18px',
+            fill: '#ffe7aa',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        this.buildNameText = this.add.text(600, 216, '', {
+            fontSize: '16px',
+            fill: '#fff4d6',
+            align: 'center',
+            fontFamily: 'Arial Black',
+            wordWrap: { width: 410 }
+        }).setOrigin(0.5);
+        this.drinkWheel = this.makeBuildWheel(600, 336, 'CHARACTER', DRINK_OPTIONS, 'drink');
+        this.gunWheel = this.makeBuildWheel(600, 552, 'WEAPON', GUN_OPTIONS, 'gun');
+
+        this.add.text(998, 206, 'SYNERGY', {
+            fontSize: '18px',
+            fill: '#d9c8ff',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        this.runHintText = this.add.text(998, 354, '', {
+            fontSize: '14px',
+            fill: '#d8e8ff',
+            align: 'center',
+            lineSpacing: 7,
+            wordWrap: { width: 210 }
+        }).setOrigin(0.5);
+        this.abilityText = this.add.text(998, 520, '', {
+            fontSize: '13px',
+            fill: '#ffd86f',
+            align: 'center',
+            lineSpacing: 7,
+            wordWrap: { width: 210 }
+        }).setOrigin(0.5);
+
+        this.makeButton(430, 724, 'BACK', () => this.scene.start('MenuScene'), 0x9fb3d9, 0x222a38, 170);
+        this.makeButton(600, 724, 'START GAME', () => {
+            GameState.reset();
+            GameState.selectedCharacter = Math.max(0, DRINK_OPTIONS.findIndex(option => option.id === GameState.selectedDrink));
+            this.scene.start('GameScene');
+        }, 0x66c878, 0x153a20, 180);
+        this.makeButton(790, 724, 'UPGRADES', () => this.scene.start('PermaUpgradeScene'), 0x5db8e8, 0x102f42, 170);
+
+        this.updateDisplays();
+    }
+
+    makeButton(x, y, text, callback, accent, fill, width) {
+        return MenuScene.prototype.makeButton.call(this, x, y, text, callback, accent, fill, width);
+    }
+
+    makeBuildWheel(x, y, label, options, type) {
+        return MenuScene.prototype.makeBuildWheel.call(this, x, y, label, options, type);
+    }
+
+    rotateBuildWheel(type, direction) {
+        return MenuScene.prototype.rotateBuildWheel.call(this, type, direction);
+    }
+
+    updateWheelPreview(wheel) {
+        return MenuScene.prototype.updateWheelPreview.call(this, wheel);
+    }
+
+    updateDisplays() {
+        this.updateBuildPreview();
+    }
+
+    updateBuildPreview() {
+        const drink = getDrinkOption();
+        const gun = getGunOption();
+        const characterIndex = Math.max(0, DRINK_OPTIONS.findIndex(option => option.id === drink.id));
+        const char = CHARACTERS[characterIndex] || CHARACTERS[0];
+
+        this.updateWheelPreview(this.drinkWheel);
+        this.updateWheelPreview(this.gunWheel);
+        this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
+        this.runHintText.setText(gun.synergy || 'Use the wheels to pick a character and weapon.');
+        this.abilityText.setText(`SPACE ABILITY\n${drink.desc}`);
+        this.statsText.setText(`SPEED ${char.speed}\nDAMAGE ${char.damage}\nFIRE RATE ${char.fireRate}ms\n${char.desc}`);
+
+        const drinkOrigin = drink.playerOrigin || { x: 0.5, y: 0.5 };
+        this.previewCharacter
+            .setTexture(drink.playerTexture)
+            .setOrigin(drinkOrigin.x, drinkOrigin.y)
+            .setScale(drink.playerScale * 2.35);
+        this.previewGun
+            .setTexture(gun.gunTexture)
+            .setOrigin(0.5)
+            .setScale(gun.gunScale * 2.25)
+            .setFlipX(!!gun.gunFacesRight);
     }
 }
 
@@ -4672,7 +4835,7 @@ const config = {
     parent: 'game-root',
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scene: [BootScene, MenuScene, IdleFactoryScene, PermaUpgradeScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
+    scene: [BootScene, MenuScene, BuildSelectScene, IdleFactoryScene, PermaUpgradeScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
     input: {
         mouse: {
             preventDefaultWheel: false
