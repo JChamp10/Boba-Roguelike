@@ -2,6 +2,7 @@
     const USERNAME_KEY = 'boba_player_username';
     const API_KEY = 'boba_api_url';
     const SAVE_KEY = 'boba_roguelike_save';
+    const LOCAL_LEADERBOARD_KEY = 'boba_local_leaderboard';
     const DEFAULT_API_URL = 'https://boba-roguelike.onrender.com';
 
     let apiUrl = cleanApiUrl(window.BOBA_API_URL || localStorage.getItem(API_KEY) || DEFAULT_API_URL);
@@ -22,7 +23,7 @@
     }
 
     function getUsername() {
-        return sanitizeUsername(localStorage.getItem(USERNAME_KEY) || '');
+        return sanitizeUsername(localStorage.getItem(USERNAME_KEY) || 'Player');
     }
 
     function setUsername(value) {
@@ -64,18 +65,59 @@
     }
 
     async function fetchLeaderboard() {
-        const data = await request('/leaderboard');
-        return data.leaders || [];
+        try {
+            const data = await request('/leaderboard');
+            const remote = data.leaders || [];
+            return remote.length ? remote : getLocalLeaderboard();
+        } catch (error) {
+            console.warn('Remote leaderboard unavailable, using local scores', error);
+            return getLocalLeaderboard();
+        }
     }
 
     async function submitRunStats(stats) {
         const username = getUsername();
         if (username.length < 3) return null;
-        const data = await request('/leaderboard/submit', {
-            method: 'POST',
-            body: JSON.stringify({ ...stats, username })
-        });
-        return data.stats || null;
+        const localStats = saveLocalRunStats(username, stats);
+        try {
+            const data = await request('/leaderboard/submit', {
+                method: 'POST',
+                body: JSON.stringify({ ...stats, username })
+            });
+            return data.stats || localStats;
+        } catch (error) {
+            console.warn('Remote leaderboard submit failed, kept local score', error);
+            return localStats;
+        }
+    }
+
+    function readLocalLeaderboard() {
+        try {
+            return JSON.parse(localStorage.getItem(LOCAL_LEADERBOARD_KEY) || '{}') || {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function getLocalLeaderboard() {
+        return Object.entries(readLocalLeaderboard())
+            .map(([username, stats]) => ({ username, ...stats }))
+            .sort((a, b) => (b.high_score - a.high_score) || (b.total_kills - a.total_kills))
+            .slice(0, 10);
+    }
+
+    function saveLocalRunStats(username, stats = {}) {
+        const board = readLocalLeaderboard();
+        const current = board[username] || { high_score: 0, total_kills: 0, best_level: 1, runs_played: 0 };
+        const next = {
+            high_score: Math.max(current.high_score || 0, Math.max(0, Math.floor(Number(stats.score) || 0))),
+            total_kills: Math.max(current.total_kills || 0, Math.max(0, Math.floor(Number(stats.totalKills) || 0))),
+            best_level: Math.max(current.best_level || 1, Math.max(1, Math.floor(Number(stats.level) || 1))),
+            runs_played: (current.runs_played || 0) + 1
+        };
+        board[username] = next;
+        localStorage.setItem(LOCAL_LEADERBOARD_KEY, JSON.stringify(board));
+        return next;
     }
 
     function encodeSaveCode(payload) {

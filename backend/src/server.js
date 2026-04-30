@@ -50,6 +50,25 @@ function publicUser(row) {
     };
 }
 
+let leaderboardSchemaReady = false;
+
+async function ensureLeaderboardSchema() {
+    if (leaderboardSchemaReady) return;
+    await db.query(`
+        create table if not exists public_player_stats (
+            username text primary key,
+            high_score integer not null default 0,
+            total_kills integer not null default 0,
+            best_level integer not null default 1,
+            runs_played integer not null default 0,
+            updated_at timestamptz not null default now()
+        )
+    `);
+    await db.query('create index if not exists idx_public_player_stats_high_score on public_player_stats (high_score desc)');
+    await db.query('create index if not exists idx_public_player_stats_total_kills on public_player_stats (total_kills desc)');
+    leaderboardSchemaReady = true;
+}
+
 app.get('/health', async (req, res, next) => {
     try {
         if (!db.isConfigured()) {
@@ -179,6 +198,7 @@ app.put('/save', requireAuth, async (req, res, next) => {
 
 app.get('/leaderboard', async (req, res, next) => {
     try {
+        await ensureLeaderboardSchema();
         const result = await db.query(
             `select username, high_score, total_kills, best_level, runs_played
              from public_player_stats
@@ -193,6 +213,7 @@ app.get('/leaderboard', async (req, res, next) => {
 
 app.post('/leaderboard/submit', async (req, res, next) => {
     try {
+        await ensureLeaderboardSchema();
         const username = normalizeUsername(req.body.username).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24);
         const score = Math.max(0, Math.floor(Number(req.body.score) || 0));
         const kills = Math.max(0, Math.floor(Number(req.body.totalKills) || 0));
@@ -210,7 +231,8 @@ app.post('/leaderboard/submit', async (req, res, next) => {
                 high_score = greatest(public_player_stats.high_score, excluded.high_score),
                 total_kills = greatest(public_player_stats.total_kills, excluded.total_kills),
                 best_level = greatest(public_player_stats.best_level, excluded.best_level),
-                runs_played = public_player_stats.runs_played + 1
+                runs_played = public_player_stats.runs_played + 1,
+                updated_at = now()
              returning high_score, total_kills, best_level, runs_played`,
             [username, score, kills, level]
         );
