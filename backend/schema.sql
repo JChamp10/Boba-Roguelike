@@ -25,10 +25,21 @@ create table if not exists player_stats (
     updated_at timestamptz not null default now()
 );
 
+create table if not exists public_player_stats (
+    username text primary key,
+    high_score integer not null default 0,
+    total_kills integer not null default 0,
+    best_level integer not null default 1,
+    runs_played integer not null default 0,
+    updated_at timestamptz not null default now()
+);
+
 create index if not exists idx_users_email on users (lower(email));
 create index if not exists idx_users_username on users (lower(username));
 create index if not exists idx_player_stats_high_score on player_stats (high_score desc);
 create index if not exists idx_player_stats_total_kills on player_stats (total_kills desc);
+create index if not exists idx_public_player_stats_high_score on public_player_stats (high_score desc);
+create index if not exists idx_public_player_stats_total_kills on public_player_stats (total_kills desc);
 
 create or replace function set_updated_at()
 returns trigger as $$
@@ -51,4 +62,9 @@ for each row execute function set_updated_at();
 drop trigger if exists player_stats_set_updated_at on player_stats;
 create trigger player_stats_set_updated_at
 before update on player_stats
+for each row execute function set_updated_at();
+
+drop trigger if exists public_player_stats_set_updated_at on public_player_stats;
+create trigger public_player_stats_set_updated_at
+before update on public_player_stats
 for each row execute function set_updated_at();

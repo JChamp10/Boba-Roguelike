@@ -66,135 +66,125 @@
             background: var(--boba-bg);
             z-index: 10;
         }
-        #auth-gate {
+        #profile-tools {
             position: fixed;
-            inset: 0;
-            z-index: 20;
+            left: 14px;
+            bottom: 14px;
+            z-index: 8;
+            width: min(420px, calc(100vw - 28px));
             display: grid;
-            place-items: center;
-            padding: 24px;
-            color: #fff4d6;
+            grid-template-columns: 1fr auto auto;
+            gap: 8px;
+            align-items: end;
+            color: var(--boba-cream);
             font-family: Arial, sans-serif;
-            background:
-                linear-gradient(rgba(4, 8, 15, 0.84), rgba(4, 8, 15, 0.92)),
-                radial-gradient(circle at 22% 18%, rgba(56, 217, 255, 0.18), transparent 34%),
-                radial-gradient(circle at 78% 80%, rgba(255, 95, 162, 0.14), transparent 34%),
-                var(--boba-bg);
+            pointer-events: auto;
         }
-        .auth-panel {
-            width: min(430px, 100%);
+        .profile-name {
+            display: grid;
+            gap: 4px;
+        }
+        .profile-name label {
+            color: var(--boba-aqua);
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 0.8px;
+        }
+        #profile-username,
+        #save-code-text {
             border: 2px solid rgba(56, 217, 255, 0.7);
             border-radius: 8px;
-            padding: 28px;
+            color: var(--boba-cream);
             background: rgba(10, 18, 28, 0.96);
-            background: color-mix(in srgb, var(--boba-panel) 94%, black);
-            box-shadow: 0 0 32px rgba(56, 217, 255, 0.18), inset 0 0 22px rgba(255, 184, 75, 0.06);
+            outline: none;
+            box-shadow: 0 0 18px rgba(88, 221, 255, 0.14);
         }
-        .auth-panel h1 {
-            margin-bottom: 6px;
-            font-size: 34px;
-            line-height: 1;
-            color: #fff4d6;
+        #profile-username {
+            min-height: 38px;
+            padding: 0 10px;
             font-weight: 900;
         }
-        .auth-panel p {
-            margin-bottom: 18px;
-            color: #b8c9d8;
-            font-size: 14px;
-        }
-        .auth-tabs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-        .auth-tab,
-        .auth-panel button {
-            min-height: 42px;
-            border: 1px solid rgba(126, 210, 255, 0.7);
-            border-radius: 6px;
-            color: #fff7e6;
-            background: #102335;
+        #profile-tools button,
+        .save-code-actions button {
+            min-height: 38px;
+            border: 2px solid var(--boba-aqua);
+            border-radius: 8px;
+            padding: 0 12px;
+            color: var(--boba-cream);
+            background: rgba(16, 35, 53, 0.94);
             font-weight: 900;
             cursor: pointer;
+            transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
         }
-        .auth-tab[aria-selected="true"] {
-            color: #08111b;
-            background: #7ed2ff;
+        #profile-tools button:hover,
+        .save-code-actions button:hover {
+            transform: translateY(-1px);
+            border-color: var(--boba-gold);
+            background: rgba(31, 69, 96, 0.98);
         }
-        .auth-panel label {
-            display: block;
-            margin: 12px 0 6px;
-            color: #ffe7b3;
-            font-size: 12px;
-            font-weight: 900;
-            letter-spacing: 0.5px;
+        #profile-tools button:active,
+        .save-code-actions button:active {
+            transform: translateY(1px) scale(0.98);
         }
-        .auth-panel input {
-            width: 100%;
-            min-height: 42px;
-            border: 1px solid rgba(126, 210, 255, 0.45);
-            border-radius: 6px;
-            padding: 0 12px;
-            color: #fff7e6;
-            background: #07111d;
-            outline: none;
-        }
-        .auth-panel input:focus {
-            border-color: #7ed2ff;
-            box-shadow: 0 0 0 3px rgba(126, 210, 255, 0.14);
-        }
-        .auth-api-row {
-            margin-top: 14px;
-            padding-top: 12px;
-            border-top: 1px solid rgba(126, 210, 255, 0.18);
-        }
-        .auth-api-row label {
-            color: #9fd7ff;
-        }
-        .auth-actions {
-            display: grid;
-            gap: 10px;
-            margin-top: 18px;
-        }
-        .auth-primary {
-            border-color: #f6b84b !important;
-            color: #151006 !important;
-            background: #f6b84b !important;
-        }
-        .auth-secondary {
-            border-color: #7ed2ff !important;
-            color: #dff4ff !important;
-            background: rgba(9, 20, 34, 0.92) !important;
-        }
-        #auth-message {
-            min-height: 20px;
-            margin-top: 14px;
-            color: #ffb3b3;
-            font-size: 13px;
+        #profile-message {
+            grid-column: 1 / -1;
+            min-height: 16px;
+            color: var(--boba-green);
+            font-size: 11px;
             font-weight: 800;
         }
-        .auth-hidden {
-            display: none !important;
+        #profile-message[data-state="bad"] {
+            color: var(--boba-danger);
         }
-        .auth-panel[data-mode="session"] .auth-tabs,
-        .auth-panel[data-mode="session"] .auth-fields {
+        #save-code-panel {
+            position: fixed;
+            inset: 0;
+            z-index: 30;
+            display: grid;
+            place-items: center;
+            padding: 18px;
+            color: var(--boba-cream);
+            font-family: Arial, sans-serif;
+            background: rgba(3, 6, 12, 0.76);
+        }
+        #save-code-panel.hidden {
             display: none;
         }
+        .save-code-card {
+            width: min(680px, 100%);
+            border: 2px solid var(--boba-aqua);
+            border-radius: 8px;
+            padding: 18px;
+            background: rgba(10, 18, 28, 0.98);
+            box-shadow: 0 0 34px rgba(88, 221, 255, 0.20);
+        }
+        .save-code-card h2 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        #save-code-text {
+            width: 100%;
+            min-height: 180px;
+            padding: 12px;
+            resize: vertical;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+        }
+        .save-code-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .hidden {
+            display: none !important;
+        }
         @media (max-width: 560px), (max-height: 620px) {
-            #auth-gate {
-                padding: 12px;
+            #profile-tools {
+                grid-template-columns: 1fr 1fr;
             }
-            .auth-panel {
-                padding: 18px;
-            }
-            .auth-panel h1 {
-                font-size: 26px;
-            }
-            .auth-panel input,
-            .auth-tab,
-            .auth-panel button {
-                min-height: 38px;
+            .profile-name {
+                grid-column: 1 / -1;
             }
         }
     </style>
@@ -202,34 +192,24 @@
 <body>
     <div id="game-root"></div>
     <div id="boot-status">LOADING BOBA ROGUELIKE...</div>
-    <div id="auth-gate">
-        <form class="auth-panel" id="auth-form" action="javascript:void(0)" novalidate>
-            <h1>BOBA LOGIN</h1>
-            <p>Sign in to sync your save before the run starts.</p>
-            <div class="auth-tabs" role="tablist">
-                <button class="auth-tab" id="auth-login-tab" type="button" aria-selected="true">LOGIN</button>
-                <button class="auth-tab" id="auth-signup-tab" type="button" aria-selected="false">SIGN UP</button>
+    <div id="profile-tools">
+        <div class="profile-name">
+            <label for="profile-username">LEADERBOARD NAME</label>
+            <input id="profile-username" maxlength="24" autocomplete="nickname" spellcheck="false" placeholder="3+ chars">
+        </div>
+        <button id="save-export" type="button">EXPORT</button>
+        <button id="save-import" type="button">IMPORT</button>
+        <div id="profile-message" role="status" aria-live="polite"></div>
+    </div>
+    <div id="save-code-panel" class="hidden">
+        <div class="save-code-card">
+            <h2 id="save-code-title">SAVE CODE</h2>
+            <textarea id="save-code-text" spellcheck="false"></textarea>
+            <div class="save-code-actions">
+                <button id="save-code-apply" type="button">IMPORT SAVE</button>
+                <button id="save-code-close" type="button">CLOSE</button>
             </div>
-            <div class="auth-fields">
-                <div id="auth-username-wrap" class="auth-hidden">
-                    <label for="auth-username">USERNAME</label>
-                    <input id="auth-username" name="username" autocomplete="username" minlength="3" maxlength="24">
-                </div>
-                <label for="auth-login">EMAIL OR USERNAME</label>
-                <input id="auth-login" name="login" autocomplete="email" required>
-                <label for="auth-password">PASSWORD</label>
-                <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="8" required>
-                <div class="auth-api-row">
-                    <label for="auth-api-url">RENDER API URL</label>
-                    <input id="auth-api-url" name="apiUrl" autocomplete="off" spellcheck="false">
-                </div>
-            </div>
-            <div class="auth-actions">
-                <button class="auth-primary" id="auth-submit" type="submit">LOGIN</button>
-                <button class="auth-secondary auth-hidden" id="auth-switch" type="button">SWITCH ACCOUNT</button>
-            </div>
-            <div id="auth-message" role="status" aria-live="polite"></div>
-        </form>
+        </div>
     </div>
     <script src="js/auth-client.js"></script>
     <script>
@@ -326,7 +306,7 @@
                 loadScript(scriptSources('js/game.js'));
             }
 
-            function startGameAfterLogin() {
+            function startGame() {
                 loadScriptsInOrder([
                     { src: 'vendor/phaser.min.js', status: 'LOADING PHASER...' },
                     { src: 'js/GameState.js', status: 'LOADING GAME STATE...' },
@@ -336,11 +316,11 @@
 
             if (window.BobaAuth) {
                 window.BobaAuth.init({
-                    onReady: startGameAfterLogin,
+                    onReady: startGame,
                     setStatus: setBootStatus
                 });
             } else {
-                setBootStatus('BOOT ERROR: AUTH CLIENT MISSING');
+                startGame();
             }
         }());
     </script>

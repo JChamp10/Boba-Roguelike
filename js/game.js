@@ -1600,7 +1600,7 @@ class MenuScene extends Phaser.Scene {
         });
 
         if (!window.BobaAuth?.fetchLeaderboard) {
-            this.leaderboardStatus.setText('Leaderboard unavailable until login loads.');
+            this.leaderboardStatus.setText('Leaderboard unavailable.');
             return;
         }
 

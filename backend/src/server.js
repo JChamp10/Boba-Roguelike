@@ -180,10 +180,9 @@ app.put('/save', requireAuth, async (req, res, next) => {
 app.get('/leaderboard', async (req, res, next) => {
     try {
         const result = await db.query(
-            `select u.username, s.high_score, s.total_kills, s.best_level, s.runs_played
-             from player_stats s
-             join users u on u.id = s.user_id
-             order by s.high_score desc, s.total_kills desc, s.updated_at asc
+            `select username, high_score, total_kills, best_level, runs_played
+             from public_player_stats
+             order by high_score desc, total_kills desc, updated_at asc
              limit 10`
         );
         res.json({ leaders: result.rows });
@@ -192,23 +191,28 @@ app.get('/leaderboard', async (req, res, next) => {
     }
 });
 
-app.post('/leaderboard/submit', requireAuth, async (req, res, next) => {
+app.post('/leaderboard/submit', async (req, res, next) => {
     try {
+        const username = normalizeUsername(req.body.username).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24);
         const score = Math.max(0, Math.floor(Number(req.body.score) || 0));
         const kills = Math.max(0, Math.floor(Number(req.body.totalKills) || 0));
         const level = Math.max(1, Math.floor(Number(req.body.level) || 1));
 
+        if (username.length < 3) {
+            return res.status(400).json({ error: 'Username must be 3-24 characters' });
+        }
+
         const result = await db.query(
-            `insert into player_stats (user_id, high_score, total_kills, best_level, runs_played)
+            `insert into public_player_stats (username, high_score, total_kills, best_level, runs_played)
              values ($1, $2, $3, $4, 1)
-             on conflict (user_id)
+             on conflict (username)
              do update set
-                high_score = greatest(player_stats.high_score, excluded.high_score),
-                total_kills = greatest(player_stats.total_kills, excluded.total_kills),
-                best_level = greatest(player_stats.best_level, excluded.best_level),
-                runs_played = player_stats.runs_played + 1
+                high_score = greatest(public_player_stats.high_score, excluded.high_score),
+                total_kills = greatest(public_player_stats.total_kills, excluded.total_kills),
+                best_level = greatest(public_player_stats.best_level, excluded.best_level),
+                runs_played = public_player_stats.runs_played + 1
              returning high_score, total_kills, best_level, runs_played`,
-            [req.user.sub, score, kills, level]
+            [username, score, kills, level]
         );
         res.json({ stats: result.rows[0] });
     } catch (error) {

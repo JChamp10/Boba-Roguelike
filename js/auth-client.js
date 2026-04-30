@@ -1,6 +1,5 @@
 (function () {
-    const TOKEN_KEY = 'boba_auth_token';
-    const USER_KEY = 'boba_auth_user';
+    const USERNAME_KEY = 'boba_player_username';
     const API_KEY = 'boba_api_url';
     const SAVE_KEY = 'boba_roguelike_save';
     const DEFAULT_API_URL = 'https://boba-roguelike.onrender.com';
@@ -10,67 +9,53 @@
         apiUrl = DEFAULT_API_URL;
         localStorage.setItem(API_KEY, apiUrl);
     }
-    let token = localStorage.getItem(TOKEN_KEY) || '';
-    let user = readJson(localStorage.getItem(USER_KEY));
-    let saveUploadTimer = null;
-    let lastUploadedSave = '';
-
-    function readJson(value) {
-        try {
-            return value ? JSON.parse(value) : null;
-        } catch (error) {
-            return null;
-        }
-    }
 
     function cleanApiUrl(value) {
         return String(value || '').trim().replace(/\/+$/, '');
     }
 
+    function sanitizeUsername(value) {
+        return String(value || '')
+            .trim()
+            .replace(/[^a-zA-Z0-9_-]/g, '')
+            .slice(0, 24);
+    }
+
+    function getUsername() {
+        return sanitizeUsername(localStorage.getItem(USERNAME_KEY) || '');
+    }
+
+    function setUsername(value) {
+        const username = sanitizeUsername(value);
+        if (username) {
+            localStorage.setItem(USERNAME_KEY, username);
+        } else {
+            localStorage.removeItem(USERNAME_KEY);
+        }
+        syncUsernameInput();
+        return username;
+    }
+
     function setApiUrl(value) {
         apiUrl = cleanApiUrl(value) || DEFAULT_API_URL;
         localStorage.setItem(API_KEY, apiUrl);
-        const input = document.getElementById('auth-api-url');
-        if (input) {
-            input.value = apiUrl;
-        }
-    }
-
-    function writeAuth(nextToken, nextUser) {
-        token = nextToken || '';
-        user = nextUser || null;
-        if (token) {
-            localStorage.setItem(TOKEN_KEY, token);
-            localStorage.setItem(USER_KEY, JSON.stringify(user));
-        } else {
-            localStorage.removeItem(TOKEN_KEY);
-            localStorage.removeItem(USER_KEY);
-        }
-    }
-
-    function displayName() {
-        return user?.username || user?.email || 'saved account';
+        return apiUrl;
     }
 
     async function request(path, options = {}) {
-        const { noAuth, ...fetchOptions } = options;
-        const headers = {
-            'Content-Type': 'application/json',
-            ...(fetchOptions.headers || {})
-        };
-        if (token && !noAuth) {
-            headers.Authorization = `Bearer ${token}`;
-        }
-
         let response;
         try {
             response = await fetch(`${apiUrl}${path}`, {
-                ...fetchOptions,
-                headers
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
             });
         } catch (error) {
-            throw new Error(`Cannot reach backend at ${apiUrl}. Open ${apiUrl}/health and check Render deploy logs.`);
+            throw new Error(`Cannot reach leaderboard at ${apiUrl}.`);
         }
+
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(data.error || `Request failed: ${response.status}`);
@@ -78,182 +63,135 @@
         return data;
     }
 
-    async function uploadLocalSave() {
-        if (!token) return;
-        const raw = localStorage.getItem(SAVE_KEY);
-        if (!raw || raw === lastUploadedSave) return;
-        const save = readJson(raw);
-        if (!save) return;
-        await request('/save', {
-            method: 'PUT',
-            body: JSON.stringify({ save })
-        });
-        lastUploadedSave = raw;
-    }
-
     async function fetchLeaderboard() {
-        const data = await request('/leaderboard', { noAuth: true });
+        const data = await request('/leaderboard');
         return data.leaders || [];
     }
 
     async function submitRunStats(stats) {
-        if (!token) return null;
+        const username = getUsername();
+        if (username.length < 3) return null;
         const data = await request('/leaderboard/submit', {
             method: 'POST',
-            body: JSON.stringify(stats || {})
+            body: JSON.stringify({ ...stats, username })
         });
         return data.stats || null;
     }
 
-    function queueSaveUpload() {
-        if (!token) return;
-        clearTimeout(saveUploadTimer);
-        saveUploadTimer = setTimeout(() => {
-            uploadLocalSave().catch(error => console.warn('Cloud save failed', error));
-        }, 800);
+    function encodeSaveCode(payload) {
+        const json = JSON.stringify(payload);
+        return btoa(unescape(encodeURIComponent(json)));
     }
 
-    async function restoreCloudSave() {
-        if (!token) return;
-        const data = await request('/save');
-        if (!data.save) return;
-        const localRaw = localStorage.getItem(SAVE_KEY);
-        const local = readJson(localRaw);
-        const cloud = data.save;
-        const localSavedAt = Number(local?.savedAt || 0);
-        const cloudSavedAt = Number(cloud?.savedAt || 0);
-        if (!localRaw || cloudSavedAt >= localSavedAt) {
-            localStorage.setItem(SAVE_KEY, JSON.stringify(cloud));
+    function decodeSaveCode(code) {
+        const json = decodeURIComponent(escape(atob(String(code || '').trim())));
+        return JSON.parse(json);
+    }
+
+    function exportSaveCode() {
+        const rawSave = localStorage.getItem(SAVE_KEY);
+        const payload = {
+            type: 'boba-roguelike-save',
+            version: 1,
+            exportedAt: Date.now(),
+            username: getUsername(),
+            save: rawSave ? JSON.parse(rawSave) : null
+        };
+        return encodeSaveCode(payload);
+    }
+
+    function importSaveCode(code) {
+        const payload = decodeSaveCode(code);
+        if (payload?.type !== 'boba-roguelike-save' || !payload.save || typeof payload.save !== 'object') {
+            throw new Error('That save code is not valid.');
+        }
+        localStorage.setItem(SAVE_KEY, JSON.stringify(payload.save));
+        if (payload.username) setUsername(payload.username);
+    }
+
+    function syncUsernameInput() {
+        const input = document.getElementById('profile-username');
+        if (input && input.value !== getUsername()) {
+            input.value = getUsername();
         }
     }
 
-    function setMode(mode) {
-        const isSignup = mode === 'signup';
-        const isSession = mode === 'session';
-        document.getElementById('auth-username-wrap')?.classList.toggle('auth-hidden', !isSignup);
-        document.getElementById('auth-login-tab')?.setAttribute('aria-selected', String(mode === 'login'));
-        document.getElementById('auth-signup-tab')?.setAttribute('aria-selected', String(isSignup));
-        const submit = document.getElementById('auth-submit');
-        const switchButton = document.getElementById('auth-switch');
-        const loginInput = document.getElementById('auth-login');
-        const passwordInput = document.getElementById('auth-password');
-        const usernameInput = document.getElementById('auth-username');
-        if (submit) {
-            submit.textContent = isSession ? `CONTINUE AS ${displayName().toUpperCase()}` : (isSignup ? 'CREATE ACCOUNT' : 'LOGIN');
-        }
-        switchButton?.classList.toggle('auth-hidden', !isSession);
-        if (loginInput) {
-            loginInput.placeholder = isSignup ? 'email@example.com' : 'email or username';
-            loginInput.autocomplete = isSignup ? 'email' : 'username';
-        }
-        if (passwordInput) {
-            passwordInput.autocomplete = isSignup ? 'new-password' : 'current-password';
-        }
-        if (usernameInput) {
-            usernameInput.required = isSignup;
-        }
-        document.getElementById('auth-form')?.setAttribute('data-mode', mode);
-    }
-
-    function setMessage(message, isGood = false) {
-        const node = document.getElementById('auth-message');
+    function setProfileMessage(message, isGood = true) {
+        const node = document.getElementById('profile-message');
         if (!node) return;
         node.textContent = message || '';
-        node.style.color = isGood ? '#7cff8a' : '#ffb3b3';
+        node.dataset.state = isGood ? 'good' : 'bad';
     }
 
-    async function verifyToken() {
-        if (!token) return false;
-        try {
-            const data = await request('/auth/me');
-            writeAuth(token, data.user);
-            return true;
-        } catch (error) {
-            writeAuth('', null);
-            return false;
-        }
+    function openSavePanel(mode) {
+        const panel = document.getElementById('save-code-panel');
+        const title = document.getElementById('save-code-title');
+        const text = document.getElementById('save-code-text');
+        const apply = document.getElementById('save-code-apply');
+        if (!panel || !title || !text || !apply) return;
+
+        panel.classList.remove('hidden');
+        panel.dataset.mode = mode;
+        apply.hidden = mode !== 'import';
+        title.textContent = mode === 'import' ? 'IMPORT SAVE CODE' : 'EXPORT SAVE CODE';
+        text.readOnly = mode !== 'import';
+        text.value = mode === 'import' ? '' : exportSaveCode();
+        text.focus();
+        text.select();
     }
 
-    function hideGate() {
-        document.getElementById('auth-gate')?.remove();
+    function closeSavePanel() {
+        document.getElementById('save-code-panel')?.classList.add('hidden');
+    }
+
+    function bindProfileTools() {
+        const usernameInput = document.getElementById('profile-username');
+        const exportButton = document.getElementById('save-export');
+        const importButton = document.getElementById('save-import');
+        const closeButton = document.getElementById('save-code-close');
+        const applyButton = document.getElementById('save-code-apply');
+        const text = document.getElementById('save-code-text');
+
+        syncUsernameInput();
+        usernameInput?.addEventListener('change', () => {
+            const username = setUsername(usernameInput.value);
+            setProfileMessage(username.length >= 3 ? `Scores save as ${username}.` : 'Use 3+ characters for leaderboard saves.', username.length >= 3);
+        });
+        usernameInput?.addEventListener('blur', () => usernameInput.value = getUsername());
+        exportButton?.addEventListener('click', () => openSavePanel('export'));
+        importButton?.addEventListener('click', () => openSavePanel('import'));
+        closeButton?.addEventListener('click', closeSavePanel);
+        applyButton?.addEventListener('click', () => {
+            try {
+                importSaveCode(text?.value || '');
+                setProfileMessage('Save imported. Reloading...', true);
+                window.location.reload();
+            } catch (error) {
+                setProfileMessage(error.message || 'Could not import save.', false);
+            }
+        });
     }
 
     async function init({ onReady, setStatus } = {}) {
-        setStatus?.('WAITING FOR LOGIN...');
-        setApiUrl(apiUrl);
-
-        const form = document.getElementById('auth-form');
-        const loginTab = document.getElementById('auth-login-tab');
-        const signupTab = document.getElementById('auth-signup-tab');
-        const apiInput = document.getElementById('auth-api-url');
-        const switchButton = document.getElementById('auth-switch');
-
-        loginTab?.addEventListener('click', () => setMode('login'));
-        signupTab?.addEventListener('click', () => setMode('signup'));
-        switchButton?.addEventListener('click', () => {
-            writeAuth('', null);
-            setMessage('Signed out. Pick login or sign up.');
-            setMode('login');
-        });
-        apiInput?.addEventListener('change', () => {
-            setApiUrl(apiInput.value);
-            setMessage(`Using API: ${apiUrl}`, true);
-        });
-        setMode('login');
-
-        form?.addEventListener('submit', async event => {
-            event.preventDefault();
-            const mode = form.getAttribute('data-mode') || 'login';
-            if (mode === 'session') {
-                setMessage('Loading your cloud save...', true);
-                await restoreCloudSave().catch(error => console.warn('Cloud restore failed', error));
-                hideGate();
-                onReady?.();
-                return;
-            }
-            const login = document.getElementById('auth-login')?.value || '';
-            const password = document.getElementById('auth-password')?.value || '';
-            const username = document.getElementById('auth-username')?.value || '';
-            setApiUrl(document.getElementById('auth-api-url')?.value || apiUrl);
-
-            setMessage(mode === 'signup' ? 'Creating account...' : 'Logging in...', true);
-
-            try {
-                const data = mode === 'signup'
-                    ? await request('/auth/register', {
-                        method: 'POST',
-                        body: JSON.stringify({ username, email: login, password })
-                    })
-                    : await request('/auth/login', {
-                        method: 'POST',
-                        body: JSON.stringify({ login, password })
-                    });
-                writeAuth(data.token, data.user);
-                await restoreCloudSave().catch(error => console.warn('Cloud restore failed', error));
-                hideGate();
-                onReady?.();
-            } catch (error) {
-                setMessage(error.message || 'Login failed');
-            }
-        });
-
-        if (await verifyToken()) {
-            setStatus?.('READY TO PLAY');
-            setMode('session');
-            setMessage(`Signed in as ${displayName()}. Continue when you're ready.`, true);
-        }
+        setStatus?.('LOADING LOCAL PROFILE...');
+        bindProfileTools();
+        onReady?.();
     }
 
     window.BobaAuth = {
         init,
         request,
-        queueSaveUpload,
-        uploadLocalSave,
+        queueSaveUpload: () => {},
+        uploadLocalSave: () => Promise.resolve(null),
         fetchLeaderboard,
         submitRunStats,
-        getToken: () => token,
-        getUser: () => user,
+        getToken: () => '',
+        getUser: () => ({ username: getUsername() }),
+        getUsername,
+        setUsername,
         getApiUrl: () => apiUrl,
-        setApiUrl
+        setApiUrl,
+        exportSaveCode,
+        importSaveCode
     };
 }());
