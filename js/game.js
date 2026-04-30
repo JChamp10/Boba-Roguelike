@@ -957,6 +957,26 @@ function createPermanentStoreCard(scene, x, y, upgrade, width, height) {
     const g = scene.add.graphics();
     const left = -width / 2;
     const top = -height / 2;
+    const useCardArt = visual.assetKey && scene.textures.exists(visual.assetKey);
+
+    if (useCardArt) {
+        const cardArt = scene.add.image(0, 0, visual.assetKey)
+            .setDisplaySize(width, height);
+        const level = scene.add.text(0, top + height - 15, '', {
+            fontSize: '10px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black',
+            align: 'center',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        container.add([cardArt, level]);
+        container.setSize(width, height);
+        container.setInteractive({ useHandCursor: true });
+        container.levelText = level;
+        return container;
+    }
 
     g.fillStyle(0x07090f, 0.98);
     g.fillRoundedRect(left, top, width, height, 6);
@@ -988,14 +1008,12 @@ function createPermanentStoreCard(scene, x, y, upgrade, width, height) {
         align: 'center',
         wordWrap: { width: width - 18, useAdvancedWrap: true }
     }).setOrigin(0.5);
-    const icon = visual.assetKey && scene.textures.exists(visual.assetKey)
-        ? scene.add.image(0, top + 94, visual.assetKey).setDisplaySize(56, 88)
-        : scene.add.text(0, top + 92, visual.icon, {
-            fontSize: visual.icon.length > 3 ? '20px' : '27px',
-            fill: '#fff7e6',
-            fontFamily: 'Arial Black',
-            align: 'center'
-        }).setOrigin(0.5);
+    const icon = scene.add.text(0, top + 92, visual.icon, {
+        fontSize: visual.icon.length > 3 ? '20px' : '27px',
+        fill: '#fff7e6',
+        fontFamily: 'Arial Black',
+        align: 'center'
+    }).setOrigin(0.5);
     const main = scene.add.text(0, top + 128, visual.main, {
         fontSize: '24px',
         fill: '#f6b84b',
