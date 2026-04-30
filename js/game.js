@@ -2795,7 +2795,7 @@ class GameScene extends Phaser.Scene {
         this.projectileLifespan = this.weaponProfile.projectileLifespan || 2400;
         this.playerDamage *= this.weaponProfile.damageMultiplier || 1;
         this.basePlayerDamage *= this.weaponProfile.damageMultiplier || 1;
-        this.playerFireRate *= this.weaponProfile.fireRateMultiplier || 1;
+        this.playerFireRate /= this.weaponProfile.fireRateMultiplier || 1;
         this.multiShot = this.weaponProfile.projectileCount || this.multiShot;
         this.playerDamage *= 1 + (getUnlockedIdleMutationLevel('ballMaker') * 0.005);
         this.pierceDamageScale = 0;
@@ -2998,7 +2998,7 @@ class GameScene extends Phaser.Scene {
         this.bobaCount = this.maxBobaCount;
         this.isReloading = false;
         this.reloadDuration = Math.max(250, Math.floor(1000 / (1 + this.permaReloadSpeedBonus)));
-        this.reloadDuration *= this.weaponProfile?.reloadDurationMultiplier || 1;
+        this.reloadDuration *= this.weaponType === 'matchaOrb' ? (this.weaponProfile?.reloadDurationMultiplier || 1) : 1;
         if (this.weaponType === 'tigerBlade') {
             this.reloadDuration *= 2;
         }
