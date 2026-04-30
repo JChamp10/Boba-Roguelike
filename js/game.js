@@ -107,7 +107,7 @@ const GUN_OPTIONS = [
     {
         id: 'matcha-orb',
         name: 'Matcha Orb Launcher',
-        desc: 'Poison orbs linger and lifesteal',
+        desc: 'Piercing poison orbs linger and lifesteal',
         gunTexture: 'matcha_gun',
         projectileTexture: 'matcha_projectile',
         gunScale: 0.105,
@@ -116,6 +116,7 @@ const GUN_OPTIONS = [
         projectileLifespan: 4300,
         projectileCount: 1,
         spread: 0.15,
+        pierce: 2,
         damageMultiplier: 0.55,
         fireRateMultiplier: 2.1,
         reloadDurationMultiplier: 3,
@@ -147,7 +148,7 @@ const GUN_OPTIONS = [
         desc: 'Sword slash plus a focused tiger pearl',
         gunTexture: 'tiger_gun',
         projectileTexture: 'tiger_projectile',
-        gunScale: 0.2,
+        gunScale: 0.26,
         projectileScale: 0.18,
         projectileSpeed: 520,
         projectileLifespan: 1700,
@@ -195,6 +196,7 @@ function getSelectedBuildProfile() {
         projectileLifespan: gun.projectileLifespan || 2400,
         projectileCount: gun.projectileCount,
         spread: gun.spread,
+        pierce: gun.pierce || 0,
         damageMultiplier: gun.damageMultiplier,
         fireRateMultiplier: gun.fireRateMultiplier,
         reloadDurationMultiplier: gun.reloadDurationMultiplier || 1,
@@ -798,7 +800,11 @@ function hardSwitchScene(scene, targetKey) {
 
 function startFreshRunFromMenu(scene) {
     sanitizeBuildState();
+    const selectedDrink = GameState.selectedDrink;
+    const selectedGun = GameState.selectedGun;
     GameState.reset();
+    GameState.selectedDrink = selectedDrink;
+    GameState.selectedGun = selectedGun;
     GameState.selectedCharacter = Math.max(0, DRINK_OPTIONS.findIndex(option => option.id === GameState.selectedDrink));
     hardSwitchScene(scene, 'GameScene');
 }
@@ -2595,7 +2601,7 @@ class GameScene extends Phaser.Scene {
         this.playerSpeed *= 1 + (getUnlockedIdleMutationLevel('ballRoller') * 0.01);
         this.multiShot = char.multiShot || 1;
         this.maxBounces = char.maxBounces || 0;
-        this.projectilePierce = 0;
+        this.projectilePierce = this.weaponProfile.pierce || 0;
         this.projectileSpeed = this.weaponProfile.projectileSpeed || 500;
         this.projectileScale = this.weaponProfile.projectileScale || 0.18;
         this.projectileLifespan = this.weaponProfile.projectileLifespan || 2400;
@@ -2641,8 +2647,17 @@ class GameScene extends Phaser.Scene {
         this.dashUntil = 0;
         this.lastMoveDir = { x: 0, y: -1 };
         this.abilityCooldownMs = 5200;
+        if (this.weaponType === 'matchaOrb') {
+            this.abilityCooldownMs = 5000;
+        }
+        if (this.buildAbilityType === 'zenGarden') {
+            this.abilityCooldownMs = 10400;
+        } else if (this.buildAbilityType === 'tigerFocus') {
+            this.abilityCooldownMs = 10000;
+        }
         this.nextAbilityAt = 0;
         this.abilityActiveUntil = 0;
+        this.tigerDamageBoostUntil = 0;
         this.fireRateBoostUntil = 0;
         this.fireRateBoostMultiplier = 1;
         this.speedBoostUntil = 0;
@@ -3025,7 +3040,7 @@ class GameScene extends Phaser.Scene {
             this.enemies.children.entries.forEach(enemy => {
                 if (!enemy.active) return;
                 enemy.nextAttackAt = Math.max(enemy.nextAttackAt || 0, time + 700);
-                enemy.body.velocity.scale(0.45);
+                enemy.body.velocity.scale(0.22);
                 enemy.setTint(0xb7f7ff);
             });
             this.time.delayedCall(BUILD_ABILITY_DURATION_MS, () => {
@@ -3033,7 +3048,14 @@ class GameScene extends Phaser.Scene {
             });
             this.createAbilityPulse(0x8ee8ff, 112);
         } else if (this.buildAbilityType === 'tigerFocus') {
-            this.performTigerBladeFlurry();
+            this.tigerDamageBoostUntil = this.abilityActiveUntil;
+            this.player.setTint(0xffd36a);
+            this.time.delayedCall(BUILD_ABILITY_DURATION_MS, () => {
+                if (!this.playerDown && this.player?.active) {
+                    this.player.clearTint();
+                }
+            });
+            this.createAbilityPulse(0xffb14f, 132);
         }
         this.updateUI();
     }
@@ -3552,7 +3574,10 @@ class GameScene extends Phaser.Scene {
         this.enemies.children.entries.forEach(enemy => {
             if (!enemy.active) return;
 
-            const enemySpeed = Math.min(320, Math.floor(92 + (getEnemyWaveScale(GameState.wave, 0.09) * 16) + ((GameState.wave - 1) * 4)));
+            let enemySpeed = Math.min(320, Math.floor(92 + (getEnemyWaveScale(GameState.wave, 0.09) * 16) + ((GameState.wave - 1) * 4)));
+            if (time < this.accuracyBoostUntil) {
+                enemySpeed *= 0.35;
+            }
             const dx = this.player.x - enemy.x;
             const dy = this.player.y - enemy.y;
             const distanceToPlayer = Math.max(0.001, Math.sqrt((dx * dx) + (dy * dy)));
@@ -3630,7 +3655,8 @@ class GameScene extends Phaser.Scene {
         if (this.time.now < this.accuracyBoostUntil) {
             spread *= 0.35;
         }
-        const projectileDamage = this.playerDamage * this.getAmmoDamageMultiplier();
+        const damageBoost = this.time.now < (this.tigerDamageBoostUntil || 0) ? 2 : 1;
+        const projectileDamage = this.playerDamage * this.getAmmoDamageMultiplier() * damageBoost;
         const volleyId = ++this.shotVolleyId;
 
         // Fire shotgun/multishot pearls evenly from the same gun muzzle point.
@@ -3645,7 +3671,7 @@ class GameScene extends Phaser.Scene {
 
         if (!fired) return false;
         if (this.weaponType === 'tigerBlade') {
-            this.createTigerSlash(baseAngle, projectileDamage * 0.9, true, 92);
+            this.createTigerSlash(baseAngle, projectileDamage * 0.9, true, 132);
         }
         this.bobaCount--;
         this.updateBobaDisplay();
@@ -3654,13 +3680,13 @@ class GameScene extends Phaser.Scene {
 
     createTigerSlash(angle, damage, canDamage = true, radius = 92) {
         const pivot = this.getGunPivot();
-        const arcWidth = 0.62;
+        const arcWidth = 0.84;
         const facingLeft = Math.cos(angle) < 0;
         const swingStart = angle + (facingLeft ? -0.38 : 0.38);
         const swingEnd = angle + (facingLeft ? 0.42 : -0.42);
         const slash = this.add.image(pivot.x, pivot.y, this.gunTextureKey || 'tiger_gun')
             .setOrigin(0.78, 0.5)
-            .setScale((this.weaponProfile?.gunScale || 0.2) * 1.06)
+            .setScale((this.weaponProfile?.gunScale || 0.26) * 1.28)
             .setFlipY(facingLeft)
             .setRotation(swingStart)
             .setAlpha(0.86)
@@ -3678,10 +3704,10 @@ class GameScene extends Phaser.Scene {
         this.enemies.children.entries.forEach(enemy => {
             if (!enemy.active) return;
             const dist = Phaser.Math.Distance.Between(pivot.x, pivot.y, enemy.x, enemy.y);
-            if (dist > radius + 28) return;
+            if (dist > radius + 46) return;
             const enemyAngle = Phaser.Math.Angle.Between(pivot.x, pivot.y, enemy.x, enemy.y);
             const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(enemyAngle - angle));
-            if (angleDiff > arcWidth + 0.18) return;
+            if (angleDiff > arcWidth + 0.26) return;
             this.damageEnemyFromAbility(enemy, damage, '#ffd36a');
         });
     }
@@ -3730,7 +3756,7 @@ class GameScene extends Phaser.Scene {
         boba.weaponType = this.weaponType;
         boba.volleyId = volleyId;
         boba.damage = damage;
-        boba.pierceRemaining = this.weaponType === 'matchaOrb' ? 999 : this.projectilePierce;
+        boba.pierceRemaining = this.projectilePierce;
         boba.pierceHits = 0;
         boba.hitEnemyIds = new Set();
         boba.spawnX = spawnX;
