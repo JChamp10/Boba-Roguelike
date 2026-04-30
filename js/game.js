@@ -58,12 +58,13 @@ const DRINK_OPTIONS = [
         accent: 0xff5fa2
     },
     {
-        id: 'brown-sugar',
-        name: 'Brown Sugar Boba',
-        desc: 'Molten Core reduces damage and burns nearby enemies',
-        playerTexture: 'player_boba',
-        playerScale: 0.14,
-        abilityType: 'moltenCore',
+        id: 'tiger',
+        name: 'Tiger Boba',
+        desc: 'Tiger Focus makes sword slashes deal damage',
+        playerTexture: 'tiger_player',
+        playerScale: 0.34,
+        playerOrigin: { x: 0.51, y: 0.502 },
+        abilityType: 'tigerFocus',
         accent: 0xffb14f
     }
 ];
@@ -140,21 +141,21 @@ const GUN_OPTIONS = [
         accent: 0xff5fa2
     },
     {
-        id: 'caramel-flamethrower',
-        name: 'Caramel Flamethrower',
-        desc: 'Short-range burn with syrup puddles',
-        gunTexture: 'boba_gun',
-        projectileTexture: 'projectile_boba',
-        gunScale: 0.06,
-        projectileScale: 0.12,
-        projectileSpeed: 340,
-        projectileLifespan: 520,
-        projectileCount: 4,
-        spread: 0.5,
-        damageMultiplier: 0.28,
-        fireRateMultiplier: 0.42,
-        weaponType: 'caramelFlame',
-        synergy: 'Burns leave syrup zones; SPACE creates a molten burn aura.',
+        id: 'tiger-blade',
+        name: 'Tiger Blade',
+        desc: 'Sword slash plus a focused tiger pearl',
+        gunTexture: 'tiger_gun',
+        projectileTexture: 'tiger_projectile',
+        gunScale: 0.14,
+        projectileScale: 0.18,
+        projectileSpeed: 520,
+        projectileLifespan: 1700,
+        projectileCount: 1,
+        spread: 0.08,
+        damageMultiplier: 1.12,
+        fireRateMultiplier: 1.12,
+        weaponType: 'tigerBlade',
+        synergy: 'Every shot swings the sword; SPACE makes slashes hit for 2x one projectile.',
         accent: 0xffb14f
     }
 ];
@@ -336,7 +337,7 @@ const CHARACTERS = [
     { name: 'Strawberry Boba', color: 0xff6f9f, speed: 170, damage: 11, fireRate: 320, desc: 'Close-range rush build' },
     { name: 'Matcha Boba', color: 0x27AE60, speed: 145, damage: 9, fireRate: 420, desc: 'Zone control and healing' },
     { name: 'Lychee Boba', color: 0xff5fa2, speed: 165, damage: 10, fireRate: 290, desc: 'Burst accuracy build' },
-    { name: 'Brown Sugar Boba', color: 0xD35400, speed: 150, damage: 12, fireRate: 230, desc: 'Short-range burn build' }
+    { name: 'Tiger Boba', color: 0xffb14f, speed: 168, damage: 12, fireRate: 260, desc: 'Blade-and-pearl burst build' }
 ];
 
 // IDLE FACTORY TUNING: these machines create tapioca offline, in menus, and now during runs.
@@ -936,18 +937,21 @@ function setBootStatus(message) {
 }
 
 const BOOT_IMAGE_ASSETS = [
-    { key: 'player_boba', path: 'assets/Player/player-boba.png' },
-    { key: 'boba_gun', path: 'assets/Player/boba-gun.png' },
+    { key: 'player_boba', path: 'assets/Player/Player/player-boba.png' },
+    { key: 'boba_gun', path: 'assets/Player/Gun/boba-gun.png' },
     { key: 'projectile_boba', path: 'assets/projectile-boba.png' },
-    { key: 'strawberry_player', path: 'assets/Player/Strawberry Player.png' },
-    { key: 'strawberry_gun', path: 'assets/Player/Strawberry Gun.png' },
-    { key: 'strawberry_projectile', path: 'assets/Player/Strawberry projectile.png' },
-    { key: 'matcha_player', path: 'assets/Player/Matcha Player.png' },
-    { key: 'matcha_gun', path: 'assets/Player/Matcha Gun.png' },
-    { key: 'matcha_projectile', path: 'assets/Player/Matcha Projectile.png' },
-    { key: 'lychee_player', path: 'assets/Player/Lychee Player.png' },
-    { key: 'lychee_shotgun', path: 'assets/Player/Lychee Shotgun.png' },
-    { key: 'lychee_projectile', path: 'assets/Player/Lychee Projectile.png' },
+    { key: 'strawberry_player', path: 'assets/Player/Player/Strawberry Player.png' },
+    { key: 'strawberry_gun', path: 'assets/Player/Gun/Strawberry Gun.png' },
+    { key: 'strawberry_projectile', path: 'assets/Player/Bullet/Strawberry projectile.png' },
+    { key: 'matcha_player', path: 'assets/Player/Player/Matcha Player.png' },
+    { key: 'matcha_gun', path: 'assets/Player/Gun/Matcha Gun.png' },
+    { key: 'matcha_projectile', path: 'assets/Player/Bullet/Matcha Projectile.png' },
+    { key: 'lychee_player', path: 'assets/Player/Player/Lychee Player.png' },
+    { key: 'lychee_shotgun', path: 'assets/Player/Gun/Lychee Shotgun.png' },
+    { key: 'lychee_projectile', path: 'assets/Player/Bullet/Lychee Projectile.png' },
+    { key: 'tiger_player', path: 'assets/Player/Player/tiger-player.png' },
+    { key: 'tiger_gun', path: 'assets/Player/Gun/Tiger-gun.png' },
+    { key: 'tiger_projectile', path: 'assets/Player/Bullet/Tiger-projectile.png' },
     { key: 'enemy_run_1', path: 'assets/Enemy/run-1.png' },
     { key: 'enemy_run_2', path: 'assets/Enemy/run-2.png' },
     { key: 'enemy_attack_1', path: 'assets/Enemy/attack-1.png' },
@@ -2436,9 +2440,6 @@ class GameScene extends Phaser.Scene {
         this.speedBoostMultiplier = 1;
         this.accuracyBoostUntil = 0;
         this.matchaOrbDurationBoostUntil = 0;
-        this.moltenCoreUntil = 0;
-        this.moltenDamageReduction = 0;
-        this.syrupZones = [];
         this.damageZones = [];
         this.shotVolleyId = 0;
         this.lycheeVolleyHits = new Map();
@@ -2808,14 +2809,14 @@ class GameScene extends Phaser.Scene {
                 this.enemies?.children.entries.forEach(enemy => { if (enemy.active) enemy.clearTint(); });
             });
             this.createAbilityPulse(0x8ee8ff, 112);
-        } else if (this.buildAbilityType === 'moltenCore') {
-            this.moltenCoreUntil = this.abilityActiveUntil;
-            this.moltenDamageReduction = 0.35;
-            this.createTimedDamageZone(this.player.x, this.player.y, 118, 0xff8a2a, 0.14, this.abilityActiveUntil, {
-                followPlayer: true,
-                damagePerTick: this.playerDamage * 0.28
+        } else if (this.buildAbilityType === 'tigerFocus') {
+            this.createAbilityPulse(0xffb14f, 132);
+            this.player.setTint(0xffd36a);
+            this.time.delayedCall(BUILD_ABILITY_DURATION_MS, () => {
+                if (!this.playerDown && this.player?.active) {
+                    this.player.clearTint();
+                }
             });
-            this.createAbilityPulse(0xffb14f, 120);
         }
         this.updateUI();
     }
@@ -2940,10 +2941,6 @@ class GameScene extends Phaser.Scene {
     }
 
     updateBuildAbilityZones(time, enemies = []) {
-        if (this.moltenCoreUntil > 0 && time >= this.moltenCoreUntil) {
-            this.moltenCoreUntil = 0;
-            this.moltenDamageReduction = 0;
-        }
         this.damageZones = this.damageZones.filter(zone => {
             if (time >= zone.expiresAt) {
                 zone.graphic?.destroy();
@@ -3377,9 +3374,55 @@ class GameScene extends Phaser.Scene {
         }
 
         if (!fired) return false;
+        if (this.weaponType === 'tigerBlade') {
+            this.createTigerSlash(baseAngle, projectileDamage * 2, this.time.now < this.abilityActiveUntil);
+        }
         this.bobaCount--;
         this.updateBobaDisplay();
         return true;
+    }
+
+    createTigerSlash(angle, damage, canDamage) {
+        const pivot = this.getGunPivot();
+        const radius = 92;
+        const arcWidth = 0.72;
+        const slash = this.add.graphics().setDepth(4);
+        slash.lineStyle(canDamage ? 10 : 7, canDamage ? 0xffd36a : 0xff9f3d, canDamage ? 0.86 : 0.5);
+        slash.beginPath();
+        slash.arc(pivot.x, pivot.y, radius, angle - arcWidth, angle + arcWidth, false);
+        slash.strokePath();
+        slash.lineStyle(3, 0xffffff, canDamage ? 0.75 : 0.35);
+        slash.beginPath();
+        slash.arc(pivot.x, pivot.y, radius - 16, angle - arcWidth * 0.7, angle + arcWidth * 0.7, false);
+        slash.strokePath();
+        this.tweens.add({
+            targets: slash,
+            alpha: 0,
+            scale: 1.18,
+            duration: 180,
+            ease: 'Sine.easeOut',
+            onComplete: () => slash.destroy()
+        });
+
+        if (!canDamage) return;
+        this.enemies.children.entries.forEach(enemy => {
+            if (!enemy.active) return;
+            const dist = Phaser.Math.Distance.Between(pivot.x, pivot.y, enemy.x, enemy.y);
+            if (dist > radius + 28) return;
+            const enemyAngle = Phaser.Math.Angle.Between(pivot.x, pivot.y, enemy.x, enemy.y);
+            const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(enemyAngle - angle));
+            if (angleDiff > arcWidth + 0.18) return;
+            this.damageEnemyFromAbility(enemy, damage, '#ffd36a');
+        });
+    }
+
+    damageEnemyFromAbility(enemy, damage, color = '#ffd36a') {
+        if (!enemy?.active) return;
+        this.showDamageNumber(enemy.x, enemy.y, damage, color);
+        enemy.hp -= damage;
+        if (enemy.hp <= 0) {
+            this.killEnemyFromAbility(enemy);
+        }
     }
 
     createPlayerBoba(spawnX, spawnY, angle, damage = this.playerDamage, splitDepth = 0, source = 'gun', volleyId = 0) {
@@ -3449,11 +3492,6 @@ class GameScene extends Phaser.Scene {
             : 1800;
         this.time.delayedCall(lifespan, () => {
             if (boba.active) {
-                if (boba.weaponType === 'caramelFlame') {
-                    this.createTimedDamageZone(boba.x, boba.y, 46, 0xff8a2a, 0.11, this.time.now + 2300, {
-                        damagePerTick: this.playerDamage * 0.22
-                    });
-                }
                 boba.destroy();
             }
         });
@@ -3827,7 +3865,7 @@ class GameScene extends Phaser.Scene {
 
     damagePlayer(rawDamage) {
         if (this.runEnded || this.deathTransitionPending || this.playerDown) return;
-        const totalReduction = Math.min(0.9, (this.damageReductionPercent || 0) + (this.dashDamageReduction || 0) + (this.moltenDamageReduction || 0));
+        const totalReduction = Math.min(0.9, (this.damageReductionPercent || 0) + (this.dashDamageReduction || 0));
         const reducedDamage = rawDamage * (1 - totalReduction);
         const damage = Math.max(1, reducedDamage - (this.damageReduction || 0));
         GameState.health = Math.max(0, GameState.health - damage);
