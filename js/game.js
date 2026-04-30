@@ -119,7 +119,7 @@ const GUN_OPTIONS = [
         pierce: 2,
         damageMultiplier: 0.55,
         fireRateMultiplier: 2.1,
-        reloadDurationMultiplier: 3,
+        reloadDurationMultiplier: 5,
         weaponType: 'matchaOrb',
         synergy: 'Poison damage steals life; SPACE doubles orb duration.',
         accent: 0x83f28f
@@ -2647,9 +2647,6 @@ class GameScene extends Phaser.Scene {
         this.dashUntil = 0;
         this.lastMoveDir = { x: 0, y: -1 };
         this.abilityCooldownMs = 5200;
-        if (this.weaponType === 'matchaOrb') {
-            this.abilityCooldownMs = 5000;
-        }
         if (this.buildAbilityType === 'zenGarden') {
             this.abilityCooldownMs = 10400;
         } else if (this.buildAbilityType === 'tigerFocus') {
