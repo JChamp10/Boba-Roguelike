@@ -34,7 +34,7 @@ const DRINK_OPTIONS = [
     {
         id: 'strawberry',
         name: 'Strawberry Boba',
-        desc: 'Sugar Rush boosts speed and fire rate',
+        desc: 'Sugar Rush gives infinite ammo and briefly boosts fire rate',
         playerTexture: 'strawberry_player',
         playerScale: 0.28,
         playerOrigin: { x: 0.527, y: 0.578 },
@@ -1073,6 +1073,7 @@ function setBootStatus(message) {
 }
 
 const BOOT_IMAGE_ASSETS = [
+    { key: 'menu_background', path: 'assets/Background.png' },
     { key: 'player_boba', path: 'assets/Player/Player/player-boba.png' },
     { key: 'boba_gun', path: 'assets/Player/Gun/boba-gun.png' },
     { key: 'projectile_boba', path: 'assets/projectile-boba.png' },
@@ -1511,45 +1512,60 @@ class MenuScene extends Phaser.Scene {
 
         this.createMenuBackdrop();
 
-        this.add.text(372, 70, 'BOBA', {
-            fontSize: '60px', fill: '#fff4d6', fontFamily: 'Arial Black',
-            stroke: '#7a4f15', strokeThickness: 5
-        }).setOrigin(0, 0.5);
-        this.add.text(372, 126, 'ROGUELIKE', {
-            fontSize: '46px', fill: '#83f28f', fontFamily: 'Arial Black',
-            stroke: '#143c28', strokeThickness: 5
-        }).setOrigin(0, 0.5);
-        this.add.text(376, 168, 'BUILD A WEIRD BOBA, SURVIVE WAVES, BANK TAPIOCA.', {
-            fontSize: '12px', fill: '#c2c2b8', fontFamily: 'Courier New'
-        }).setOrigin(0, 0.5);
+        const titleShadow = this.add.text(GAME_CENTER_X + 5, 82 + 6, 'BOBA', {
+            fontSize: '76px', fill: '#151016', fontFamily: 'Arial Black',
+            stroke: '#151016', strokeThickness: 10
+        }).setOrigin(0.5);
+        const title = this.add.text(GAME_CENTER_X, 82, 'BOBA', {
+            fontSize: '76px', fill: '#fff4d6', fontFamily: 'Arial Black',
+            stroke: '#5a2d1d', strokeThickness: 7
+        }).setOrigin(0.5);
+        const subtitle = this.add.text(GAME_CENTER_X, 146, 'ROGUELIKE', {
+            fontSize: '54px', fill: '#83f28f', fontFamily: 'Arial Black',
+            stroke: '#102b1c', strokeThickness: 7
+        }).setOrigin(0.5);
+        this.tweens.add({
+            targets: [titleShadow, title, subtitle],
+            y: '+=5',
+            duration: 2100,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
 
-        this.createMenuStatStrip(148, 134);
-        this.createMenuActionRail(168, 440);
+        this.createMenuStatStrip(GAME_WIDTH - 164, 86);
+        this.createMenuActionRail(96, 548);
 
-        this.add.circle(594, 410, 196, BOBA_THEME.aqua, 0.08).setStrokeStyle(3, BOBA_THEME.aqua, 0.38);
-        this.add.circle(594, 410, 138, BOBA_THEME.caramel, 0.08).setStrokeStyle(2, BOBA_THEME.caramel, 0.28);
-        this.add.rectangle(594, 462, 470, 2, BOBA_THEME.aqua, 0.26);
-        this.buildNameText = this.add.text(594, 238, '', {
+        this.add.ellipse(GAME_CENTER_X, 618, 280, 58, 0x000000, 0.36).setDepth(1);
+        this.add.ellipse(GAME_CENTER_X, 590, 360, 160, BOBA_THEME.caramel, 0.13).setDepth(1);
+        this.buildNameText = this.add.text(GAME_CENTER_X, 242, '', {
             fontSize: '18px',
             fill: '#fff4d6',
             align: 'center',
             fontFamily: 'Arial Black',
-            wordWrap: { width: 410 }
-        }).setOrigin(0.5);
-        this.buildCharacterPreview = this.add.image(514, 404, 'player_boba').setDepth(2);
-        this.buildGunPreview = this.add.image(694, 404, 'boba_gun').setDepth(2);
-        this.runHintText = this.add.text(594, 548, 'Open character select to change your boba and weapon.', {
-            fontSize: '13px',
-            fill: '#c2cbda',
+            stroke: '#17111f',
+            strokeThickness: 5,
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5).setDepth(4);
+        this.buildCharacterPreview = this.add.image(GAME_CENTER_X - 72, 458, 'player_boba').setDepth(3);
+        this.buildGunPreview = this.add.image(GAME_CENTER_X + 116, 430, 'boba_gun').setDepth(3);
+        this.tweens.add({
+            targets: [this.buildCharacterPreview, this.buildGunPreview],
+            y: '+=10',
+            duration: 1350,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+        this.runHintText = this.add.text(GAME_CENTER_X, 690, '', {
+            fontSize: '12px',
+            fill: '#fff4d6',
             align: 'center',
-            wordWrap: { width: 430 },
-            lineSpacing: 4
-        }).setOrigin(0.5);
-        this.makeButton(594, 620, 'CHARACTER SELECT', () => {
-            this.scene.start('BuildSelectScene');
-        }, 0xffd86f, 0x3a2b12, 248);
-
-        this.createLeaderboardPanel(982, 442);
+            fontFamily: 'Courier New',
+            stroke: '#000000',
+            strokeThickness: 4,
+            wordWrap: { width: 520 }
+        }).setOrigin(0.5).setDepth(4);
 
         this.saveTimer = this.time.addEvent({
             delay: 30000,
@@ -1574,77 +1590,82 @@ class MenuScene extends Phaser.Scene {
     }
 
     createMenuBackdrop() {
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x07111f);
-        this.add.circle(160, 120, 220, BOBA_THEME.aqua, 0.07);
-        this.add.circle(1040, 620, 260, BOBA_THEME.lychee, 0.06);
-        this.add.circle(560, 360, 280, BOBA_THEME.taro, 0.035);
-        const skyline = this.add.graphics();
-        const buildings = [
-            [0, 380, 70, 240], [82, 310, 88, 310], [184, 350, 78, 270],
-            [754, 330, 88, 290], [858, 280, 74, 340], [940, 350, 72, 270],
-            [260, 392, 60, 230], [660, 390, 58, 230]
-        ];
-        buildings.forEach(([x, y, w, h], index) => {
-            skyline.fillStyle(index % 2 ? 0x0d2630 : 0x0b1d29, 0.92);
-            skyline.fillRect(x, y, w, h);
-            skyline.lineStyle(1, 0x183345, 0.65);
-            skyline.strokeRect(x, y, w, h);
-            for (let wx = x + 12; wx < x + w - 10; wx += 20) {
-                for (let wy = y + 20; wy < y + h - 10; wy += 28) {
-                    skyline.fillStyle((wx + wy) % 3 === 0 ? BOBA_THEME.caramel : BOBA_THEME.matcha, 0.42);
-                    skyline.fillRect(wx, wy, 6, 8);
-                }
-            }
-        });
-        skyline.lineStyle(2, BOBA_THEME.aqua, 0.18);
-        skyline.lineBetween(0, 610, GAME_WIDTH, 610);
-        for (let x = 0; x < GAME_WIDTH; x += 40) {
-            skyline.lineStyle(1, BOBA_THEME.aqua, 0.13);
-            skyline.lineBetween(x, 0, x, GAME_HEIGHT);
+        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x08070b);
+        if (this.textures.exists('menu_background')) {
+            const bg = this.add.image(GAME_CENTER_X, GAME_CENTER_Y, 'menu_background').setDepth(0);
+            const source = this.textures.get('menu_background').getSourceImage();
+            const scale = Math.max(GAME_WIDTH / source.width, GAME_HEIGHT / source.height);
+            bg.setScale(scale);
+            this.tweens.add({
+                targets: bg,
+                scale: scale * 1.025,
+                duration: 9000,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
         }
-        for (let y = 0; y < GAME_HEIGHT; y += 40) {
-            skyline.lineStyle(1, BOBA_THEME.aqua, 0.13);
-            skyline.lineBetween(0, y, GAME_WIDTH, y);
-        }
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0.025);
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, 1080, 680, 0x000000, 0.05).setStrokeStyle(2, BOBA_THEME.aqua, 0.42);
+
+        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x05060a, 0.26).setDepth(0.2);
+        this.add.rectangle(GAME_CENTER_X, 88, GAME_WIDTH, 176, 0x000000, 0.22).setDepth(0.3);
+        this.add.ellipse(GAME_CENTER_X, 530, 520, 260, 0xffe1a1, 0.16).setDepth(0.4);
+        this.add.rectangle(26, GAME_CENTER_Y, 52, GAME_HEIGHT, 0x000000, 0.28).setDepth(0.4);
+        this.add.rectangle(GAME_WIDTH - 26, GAME_CENTER_Y, 52, GAME_HEIGHT, 0x000000, 0.28).setDepth(0.4);
     }
 
     createMenuStatStrip(x, y) {
-        createNeonPanel(this, x, y, 224, 186, BRANCH_VISUALS.speed, 0.86);
-        this.tapiocaText = this.add.text(x - 62, y - 56, '', { fontSize: '16px', fill: '#7ed2ff', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.rageBankText = this.add.text(x - 62, y, '', { fontSize: '16px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.killText = this.add.text(x - 62, y + 56, '', { fontSize: '16px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.add.image(x - 92, y - 56, 'player_boba').setScale(0.047);
-        this.add.text(x - 92, y, 'R', { fontSize: '24px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.add.text(x - 92, y + 56, 'K', { fontSize: '24px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.add.rectangle(x, y - 28, 170, 1, 0x536784, 0.45);
-        this.add.rectangle(x, y + 28, 170, 1, 0x536784, 0.45);
+        this.add.rectangle(x, y, 260, 86, 0x000000, 0.34).setDepth(5);
+        this.tapiocaText = this.add.text(x - 112, y - 24, '', { fontSize: '13px', fill: '#fff4d6', fontFamily: 'Arial Black', stroke: '#000', strokeThickness: 4 }).setOrigin(0, 0.5).setDepth(6);
+        this.rageBankText = this.add.text(x - 112, y, '', { fontSize: '13px', fill: '#fff4d6', fontFamily: 'Arial Black', stroke: '#000', strokeThickness: 4 }).setOrigin(0, 0.5).setDepth(6);
+        this.killText = this.add.text(x - 112, y + 24, '', { fontSize: '13px', fill: '#fff4d6', fontFamily: 'Arial Black', stroke: '#000', strokeThickness: 4 }).setOrigin(0, 0.5).setDepth(6);
     }
 
     createMenuActionRail(x, y) {
-        createNeonPanel(this, x, y, 250, 370, BRANCH_VISUALS.health, 0.9);
-        this.add.text(x, y - 142, 'RUN MENU', {
-            fontSize: '20px',
-            fill: '#fff4d6',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-
         const actions = [
-            { text: 'START GAME', y: y - 82, cb: () => startFreshRunFromMenu(this), accent: 0x66c878, fill: 0x153a20 },
-            { text: 'UPGRADES', y: y - 18, cb: () => this.scene.start('PermaUpgradeScene'), accent: 0x5db8e8, fill: 0x102f42 },
-            { text: 'IDLE FACTORY', y: y + 46, cb: () => this.scene.start('IdleFactoryScene'), accent: 0xf0b14b, fill: 0x442c0c },
-            { text: 'SETTINGS', y: y + 110, cb: () => this.scene.launch('ControlsScene'), accent: 0xc99af7, fill: 0x2b1d40 }
+            { text: 'Start', y: y - 96, cb: () => startFreshRunFromMenu(this), accent: 0xfff4d6 },
+            { text: 'Build', y: y - 54, cb: () => this.scene.start('BuildSelectScene'), accent: 0xffd86f },
+            { text: 'Upgrades', y: y - 12, cb: () => this.scene.start('PermaUpgradeScene'), accent: 0x7ed2ff },
+            { text: 'Factory', y: y + 30, cb: () => this.scene.start('IdleFactoryScene'), accent: 0xf0b14b },
+            { text: 'Settings', y: y + 72, cb: () => this.scene.launch('ControlsScene'), accent: 0xc99af7 }
         ];
-        actions.forEach(action => this.makeButton(x, action.y, action.text, action.cb, action.accent, action.fill, 198));
+        actions.forEach(action => this.makeMenuTextButton(x, action.y, action.text, action.cb, action.accent));
+    }
 
-        this.add.text(x, y + 154, 'Settings has controls, volume, aim mode, and saves.', {
-            fontSize: '10px',
-            fill: '#9fb3d9',
-            align: 'center',
-            wordWrap: { width: 196 },
-            lineSpacing: 3
-        }).setOrigin(0.5);
+    makeMenuTextButton(x, y, text, callback, accent = 0xfff4d6) {
+        const bg = this.add.rectangle(x, y, 136, 30, 0x000000, 0.58)
+            .setOrigin(0, 0.5)
+            .setDepth(5)
+            .setInteractive({ useHandCursor: true });
+        const label = this.add.text(x + 12, y, text, {
+            fontSize: '18px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0, 0.5).setDepth(6);
+        const marker = this.add.rectangle(x, y, 4, 22, accent, 0).setOrigin(0, 0.5).setDepth(6);
+        const hover = () => {
+            bg.setFillStyle(0xfff4d6, 0.92);
+            label.setColor('#141016').setStroke('#fff4d6', 0);
+            marker.setAlpha(1);
+            this.tweens.add({ targets: [bg, label, marker], x: '+=8', duration: 80, ease: 'Sine.easeOut' });
+        };
+        const out = () => {
+            bg.setFillStyle(0x000000, 0.58);
+            label.setColor('#fff4d6').setStroke('#000000', 4);
+            marker.setAlpha(0);
+            this.tweens.add({ targets: bg, x, duration: 80, ease: 'Sine.easeOut' });
+            this.tweens.add({ targets: label, x: x + 12, duration: 80, ease: 'Sine.easeOut' });
+            this.tweens.add({ targets: marker, x, duration: 80, ease: 'Sine.easeOut' });
+        };
+        bg.on('pointerover', hover);
+        bg.on('pointerout', out);
+        bg.on('pointerdown', callback);
+        label.setInteractive({ useHandCursor: true });
+        label.on('pointerover', hover);
+        label.on('pointerout', out);
+        label.on('pointerdown', callback);
+        return bg;
     }
 
     makeTopIconButton(x, y, text, callback) {
@@ -1668,9 +1689,9 @@ class MenuScene extends Phaser.Scene {
     }
 
     updateDisplays() {
-        this.tapiocaText.setText('TAPIOCA\n' + Math.floor(GameState.tapioca));
-        this.rageBankText.setText('RAGE\n' + Math.floor(GameState.rage));
-        this.killText.setText('KILLS\n' + GameState.totalEnemiesKilled);
+        this.tapiocaText.setText(`TAPIOCA  ${Math.floor(GameState.tapioca)}`);
+        this.rageBankText.setText(`RAGE     ${Math.floor(GameState.rage)}`);
+        this.killText.setText(`KILLS    ${GameState.totalEnemiesKilled}`);
         this.updateBuildPreview();
         if (this.volumePercent) {
             this.volumePercent.setText(String(Math.floor(GameState.volume * 100)) + '%');
@@ -1947,13 +1968,13 @@ class MenuScene extends Phaser.Scene {
             this.buildCharacterPreview
                 .setTexture(drink.playerTexture)
                 .setOrigin(drinkOrigin.x, drinkOrigin.y)
-                .setScale(drink.playerScale * 2.1);
+                .setScale(drink.playerScale * 2.85);
         }
         if (this.buildGunPreview) {
             this.buildGunPreview
                 .setTexture(gun.gunTexture)
                 .setOrigin(0.5)
-                .setScale(gun.gunScale * 1.95)
+                .setScale(gun.gunScale * 2.45)
                 .setFlipX(!!gun.gunFacesRight);
         }
         if (this.charPreview) {
@@ -2930,6 +2951,7 @@ class GameScene extends Phaser.Scene {
         this.fireRateBoostMultiplier = 1;
         this.speedBoostUntil = 0;
         this.speedBoostMultiplier = 1;
+        this.infiniteAmmoUntil = 0;
         this.accuracyBoostUntil = 0;
         this.matchaOrbDurationBoostUntil = 0;
         this.damageZones = [];
@@ -3277,6 +3299,7 @@ class GameScene extends Phaser.Scene {
         if (this.buildAbilityType === 'classicDash') {
             this.reloadAmmoFromAbility();
             this.createAbilityScreenTinge(0x7efcff, 360, 0.18);
+            this.createAbilityParticles(0x7efcff, 360, 70, 6);
         }
         this.playDashRoll(dir);
         this.createDashEffect(dir);
@@ -3294,12 +3317,15 @@ class GameScene extends Phaser.Scene {
         this.abilityActiveUntil = time + BUILD_ABILITY_DURATION_MS;
 
         if (this.buildAbilityType === 'sugarRush') {
-            this.speedBoostUntil = this.abilityActiveUntil;
-            this.speedBoostMultiplier = 1.9;
+            this.infiniteAmmoUntil = this.abilityActiveUntil;
             this.fireRateBoostUntil = this.abilityActiveUntil;
             this.fireRateBoostMultiplier = 1.85;
+            this.bobaCount = this.maxBobaCount;
+            this.isReloading = false;
+            this.reloadText?.setVisible(false);
             this.createAbilityPulse(0xff6f9f, 96);
             this.createAbilityScreenTinge(0xff6f9f, BUILD_ABILITY_DURATION_MS, 0.12);
+            this.createAbilityParticles(0xff6f9f, BUILD_ABILITY_DURATION_MS, 86, 8);
         } else if (this.buildAbilityType === 'zenGarden') {
             this.createTimedDamageZone(this.player.x, this.player.y, 120, 0x83f28f, 0.12, this.abilityActiveUntil, {
                 followPlayer: true,
@@ -3309,6 +3335,7 @@ class GameScene extends Phaser.Scene {
             this.matchaOrbDurationBoostUntil = time + 7000;
             this.createAbilityPulse(0x83f28f, 128);
             this.createAbilityScreenTinge(0x83f28f, BUILD_ABILITY_DURATION_MS, 0.10);
+            this.createAbilityParticles(0x83f28f, BUILD_ABILITY_DURATION_MS, 110, 9);
         } else if (this.buildAbilityType === 'crystalFocus') {
             this.accuracyBoostUntil = this.abilityActiveUntil;
             this.fireRateBoostUntil = this.abilityActiveUntil;
@@ -3324,6 +3351,7 @@ class GameScene extends Phaser.Scene {
             });
             this.createAbilityPulse(0x8ee8ff, 112);
             this.createAbilityScreenTinge(0x8ee8ff, BUILD_ABILITY_DURATION_MS, 0.13);
+            this.createAbilityParticles(0x8ee8ff, BUILD_ABILITY_DURATION_MS, 94, 7);
         } else if (this.buildAbilityType === 'tigerFocus') {
             this.tigerDamageBoostUntil = this.abilityActiveUntil;
             this.player.setTint(0xffd36a);
@@ -3334,6 +3362,7 @@ class GameScene extends Phaser.Scene {
             });
             this.createAbilityPulse(0xffb14f, 132);
             this.createAbilityScreenTinge(0xffb14f, BUILD_ABILITY_DURATION_MS, 0.12);
+            this.createAbilityParticles(0xffb14f, BUILD_ABILITY_DURATION_MS, 96, 9);
         }
         this.updateUI();
     }
@@ -3367,14 +3396,63 @@ class GameScene extends Phaser.Scene {
 
     createAbilityScreenTinge(color, duration = 420, alpha = 0.12) {
         const overlay = this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, color, alpha)
-            .setDepth(1.5)
+            .setDepth(3.5)
             .setBlendMode(Phaser.BlendModes.ADD);
+
+        this.time.delayedCall(duration, () => {
+            if (!overlay.active) return;
+            this.tweens.add({
+                targets: overlay,
+                alpha: 0,
+                duration: 260,
+                ease: 'Sine.easeOut',
+                onComplete: () => overlay.destroy()
+            });
+        });
+    }
+
+    createAbilityParticles(color, duration = 420, radius = 84, burstCount = 7) {
+        const endAt = this.time.now + duration;
+        const spawnBurst = () => {
+            if (this.playerDown || this.runEnded || !this.player?.active || this.time.now > endAt) return;
+            for (let i = 0; i < burstCount; i++) {
+                this.spawnAbilityParticle(color, radius);
+            }
+        };
+
+        spawnBurst();
+        const timer = this.time.addEvent({
+            delay: 115,
+            loop: true,
+            callback: () => {
+                if (this.time.now > endAt || this.playerDown || this.runEnded || !this.player?.active) {
+                    timer.remove(false);
+                    return;
+                }
+                spawnBurst();
+            }
+        });
+    }
+
+    spawnAbilityParticle(color, radius) {
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const startRadius = Phaser.Math.Between(12, Math.max(16, radius * 0.42));
+        const endRadius = Phaser.Math.Between(Math.floor(radius * 0.55), radius);
+        const startX = this.player.x + Math.cos(angle) * startRadius;
+        const startY = this.player.y + Math.sin(angle) * startRadius;
+        const particle = this.add.circle(startX, startY, Phaser.Math.Between(2, 5), color, 0.72)
+            .setDepth(3.7)
+            .setBlendMode(Phaser.BlendModes.ADD);
+
         this.tweens.add({
-            targets: overlay,
+            targets: particle,
+            x: this.player.x + Math.cos(angle) * endRadius,
+            y: this.player.y + Math.sin(angle) * endRadius,
             alpha: 0,
-            duration,
+            scale: Phaser.Math.FloatBetween(1.4, 2.4),
+            duration: Phaser.Math.Between(320, 560),
             ease: 'Sine.easeOut',
-            onComplete: () => overlay.destroy()
+            onComplete: () => particle.destroy()
         });
     }
 
@@ -3984,7 +4062,8 @@ class GameScene extends Phaser.Scene {
     }
 
     shootBoba(target) {
-        if (this.bobaCount <= 0 || this.playerDown) return false;
+        const hasInfiniteAmmo = this.time.now < (this.infiniteAmmoUntil || 0);
+        if ((!hasInfiniteAmmo && this.bobaCount <= 0) || this.playerDown) return false;
         if (!this.isFinitePoint(target)) return false;
 
         const pivot = this.getGunPivot();
@@ -4034,7 +4113,9 @@ class GameScene extends Phaser.Scene {
         if (this.weaponType === 'tigerBlade') {
             this.createTigerSlash(baseAngle, projectileDamage * 0.9, true, 132);
         }
-        this.bobaCount--;
+        if (!hasInfiniteAmmo) {
+            this.bobaCount--;
+        }
         this.updateBobaDisplay();
         return true;
     }
@@ -4293,6 +4374,11 @@ class GameScene extends Phaser.Scene {
     updateBobaDisplay() {
         if (this.playerDown) {
             this.bobaCountText.setText('DOWN');
+            return;
+        }
+
+        if (this.time?.now < (this.infiniteAmmoUntil || 0)) {
+            this.bobaCountText.setText(`BOBA: INF/${this.maxBobaCount}`);
             return;
         }
 
