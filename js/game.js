@@ -113,7 +113,7 @@ const GUN_OPTIONS = [
     {
         id: 'matcha-orb',
         name: 'Matcha Orb Launcher',
-        desc: 'Piercing poison orbs linger and lifesteal',
+        desc: 'Infinite-pierce poison orbs linger and lifesteal',
         gunTexture: 'matcha_gun',
         projectileTexture: 'matcha_projectile',
         gunScale: 0.105,
@@ -122,12 +122,12 @@ const GUN_OPTIONS = [
         projectileLifespan: 4300,
         projectileCount: 1,
         spread: 0.15,
-        pierce: 2,
+        pierce: Infinity,
         damageMultiplier: 0.55,
         fireRateMultiplier: 2.1,
         reloadDurationMultiplier: 5,
         weaponType: 'matchaOrb',
-        synergy: 'Poison damage steals life; SPACE doubles orb duration.',
+        synergy: 'Infinite pierce poison steals life; SPACE doubles orb duration.',
         accent: 0x83f28f
     },
     {
@@ -552,9 +552,9 @@ const PERMA_STORE_VISUALS = {
     menuReload: { theme: 'speed', tag: 'BOOST', icon: 'RLD', assetKey: 'perma_reload_1', main: '+1%', sub: 'Reload per level' },
     menuHealth: { theme: 'health', tag: 'BOOST', icon: 'HP', assetKey: 'perma_health_1', main: '+1', sub: 'Max HP per level' },
     menuAmmo: { theme: 'machine', tag: 'BOOST', icon: 'AMMO', main: '+1', sub: 'Ammo per level' },
-    menuRageBonus: { theme: 'runboost', tag: 'RUN BOOST', icon: 'RAGE', main: '+2%', sub: 'Rage gain' },
+    menuRageBonus: { theme: 'runboost', tag: 'RUN BOOST', icon: 'RAGE', assetKey: 'temp_rage_2', main: '+2%', sub: 'Rage gain' },
     menuRunDamage: { theme: 'damage', tag: 'RUN BOOST', icon: 'DMG', assetKey: 'temp_damage_5', main: '+5%', sub: 'Run damage' },
-    menuXpBonus: { theme: 'speed', tag: 'RUN BOOST', icon: 'XP', main: '+5%', sub: 'XP gain' }
+    menuXpBonus: { theme: 'speed', tag: 'RUN BOOST', icon: 'XP', assetKey: 'temp_xp_5', main: '+5%', sub: 'XP gain' }
 };
 
 const BOOST_BAY_DATA = [
@@ -1141,6 +1141,7 @@ function setBootStatus(message) {
 
 const BOOT_IMAGE_ASSETS = [
     { key: 'menu_background', path: 'assets/Background.png' },
+    { key: 'battle_background', path: 'assets/battle background.png' },
     { key: 'player_boba', path: 'assets/Player/Player/player-boba.png' },
     { key: 'boba_gun', path: 'assets/Player/Gun/boba-gun.png' },
     { key: 'projectile_boba', path: 'assets/projectile-boba.png' },
@@ -1174,7 +1175,9 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'temp_damage_5', path: 'assets/Perma and Temp Upgrades/Damage 5% Temporary.png' },
     { key: 'perma_health_1', path: 'assets/Perma and Temp Upgrades/Health 1% Permanant.png' },
     { key: 'perma_reload_1', path: 'assets/Perma and Temp Upgrades/Reload Speed 1% permanant.png' },
-    { key: 'perma_speed_1', path: 'assets/Perma and Temp Upgrades/Speed 1% Permanant.png' }
+    { key: 'perma_speed_1', path: 'assets/Perma and Temp Upgrades/Speed 1% Permanant.png' },
+    { key: 'temp_rage_2', path: 'assets/Perma and Temp Upgrades/Rage.png' },
+    { key: 'temp_xp_5', path: 'assets/Perma and Temp Upgrades/XP.png' }
 ];
 
 // ============================================
@@ -3229,18 +3232,7 @@ class GameScene extends Phaser.Scene {
         GameState.tc = 0;
 
         this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x07111f);
-        this.add.circle(160, 90, 230, BOBA_THEME.aqua, 0.055);
-        this.add.circle(1040, 720, 300, BOBA_THEME.lychee, 0.045);
-
-        const grid = this.add.graphics();
-        grid.lineStyle(1, BOBA_THEME.aqua, 0.16);
-        for (let x = 0; x < GAME_WIDTH; x += 40) {
-            grid.lineBetween(x, 0, x, GAME_HEIGHT);
-        }
-        for (let y = 0; y < GAME_HEIGHT; y += 40) {
-            grid.lineBetween(0, y, GAME_WIDTH, y);
-        }
+        this.createBattleBackdrop();
 
         this.createPlayer();
         this.createHud();
@@ -3316,6 +3308,28 @@ class GameScene extends Phaser.Scene {
 
         this.syncAimInputMode();
         this.updateUI();
+    }
+
+    createBattleBackdrop() {
+        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x07111f);
+        if (this.textures.exists('battle_background')) {
+            const bg = this.add.image(GAME_CENTER_X, GAME_CENTER_Y, 'battle_background').setDepth(0);
+            const source = this.textures.get('battle_background').getSourceImage();
+            const scale = Math.max(GAME_WIDTH / source.width, GAME_HEIGHT / source.height);
+            bg.setScale(scale);
+        } else {
+            this.add.circle(160, 90, 230, BOBA_THEME.aqua, 0.055);
+            this.add.circle(1040, 720, 300, BOBA_THEME.lychee, 0.045);
+
+            const grid = this.add.graphics();
+            grid.lineStyle(1, BOBA_THEME.aqua, 0.16);
+            for (let x = 0; x < GAME_WIDTH; x += 40) {
+                grid.lineBetween(x, 0, x, GAME_HEIGHT);
+            }
+            for (let y = 0; y < GAME_HEIGHT; y += 40) {
+                grid.lineBetween(0, y, GAME_WIDTH, y);
+            }
+        }
     }
 
     createPlayer() {
@@ -3529,14 +3543,14 @@ class GameScene extends Phaser.Scene {
     tryDash(time) {
         if (this.playerDown || this.runEnded || this.dashCharges <= 0) return;
         this.dashCharges--;
-        if (this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt <= 0) {
-            this.nextDashRechargeAt = time + this.dashRechargeDelay;
-        }
 
         const dir = this.getDashDirection();
         this.isDashing = true;
         this.dashDamageReduction = 0.5;
         this.dashUntil = time + 210;
+        if (this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt <= 0) {
+            this.nextDashRechargeAt = this.dashUntil + this.dashRechargeDelay;
+        }
         this.player.body.setVelocity(dir.x * 760, dir.y * 760);
         this.player.setTint(0x9dfff2);
         if (this.buildAbilityType === 'classicDash') {
@@ -3556,8 +3570,8 @@ class GameScene extends Phaser.Scene {
             this.tryDash(time);
             return;
         }
-        this.nextAbilityAt = time + this.abilityCooldownMs;
         this.abilityActiveUntil = time + BUILD_ABILITY_DURATION_MS;
+        this.nextAbilityAt = this.abilityActiveUntil + this.abilityCooldownMs;
 
         if (this.buildAbilityType === 'sugarRush') {
             this.infiniteAmmoUntil = this.abilityActiveUntil;
@@ -4655,11 +4669,14 @@ class GameScene extends Phaser.Scene {
                 ? 1
                 : Phaser.Math.Clamp(1 - ((this.nextDashRechargeAt - this.time.now) / this.dashRechargeDelay), 0, 1);
         } else {
-            const abilityCooldown = this.time.now < this.nextAbilityAt
+            const abilityActive = this.time.now < (this.abilityActiveUntil || 0);
+            const abilityCooldown = abilityActive
+                ? ' ACTIVE'
+                : this.time.now < this.nextAbilityAt
                 ? ` ${Math.max(0, Math.ceil((this.nextAbilityAt - this.time.now) / 1000))}s`
                 : ' READY';
             this.dashText.setText(`SPACE: ${abilityCooldown}`);
-            abilityFillPct = this.time.now >= this.nextAbilityAt
+            abilityFillPct = abilityActive || this.time.now >= this.nextAbilityAt
                 ? 1
                 : Phaser.Math.Clamp(1 - ((this.nextAbilityAt - this.time.now) / this.abilityCooldownMs), 0, 1);
         }
