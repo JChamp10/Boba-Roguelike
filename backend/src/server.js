@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const cors = require('cors');
 const express = require('express');
 const db = require('./db');
@@ -8,6 +9,7 @@ const { requireAuth, signToken } = require('./auth');
 
 const app = express();
 const port = process.env.PORT || 10000;
+const LEADERBOARD_RESET_CODE_HASH = process.env.LEADERBOARD_RESET_CODE_HASH || '0fadc8fc5bad0ac8f42b16aeb31a957373ff9cd4a9ad82041b793b514e8e1c5f';
 
 // BACKEND TUNING: add your GitHub Pages/custom domains to CORS_ORIGIN, comma-separated.
 const allowedOrigins = (process.env.CORS_ORIGIN || '')
@@ -237,6 +239,23 @@ app.post('/leaderboard/submit', async (req, res, next) => {
             [username, score, kills, level]
         );
         res.json({ stats: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.post('/leaderboard/reset', async (req, res, next) => {
+    try {
+        const codeHash = crypto
+            .createHash('sha256')
+            .update(String(req.body.code || '').trim().toUpperCase())
+            .digest('hex');
+        if (codeHash !== LEADERBOARD_RESET_CODE_HASH) {
+            return res.status(403).json({ error: 'Invalid reset code' });
+        }
+        await ensureLeaderboardSchema();
+        await db.query('truncate table public_player_stats');
+        res.json({ ok: true });
     } catch (error) {
         next(error);
     }

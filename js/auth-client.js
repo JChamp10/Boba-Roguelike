@@ -152,6 +152,20 @@
         return next;
     }
 
+    async function resetLeaderboard(code) {
+        localStorage.removeItem(LOCAL_LEADERBOARD_KEY);
+        try {
+            await request('/leaderboard/reset', {
+                method: 'POST',
+                body: JSON.stringify({ code: String(code || '') })
+            });
+            return { remote: true };
+        } catch (error) {
+            console.warn('Remote leaderboard reset failed; local scores were cleared.', error);
+            return { remote: false };
+        }
+    }
+
     function encodeSaveCode(payload) {
         const json = JSON.stringify(payload);
         return btoa(unescape(encodeURIComponent(json)));
@@ -232,6 +246,8 @@
         const closeButton = document.getElementById('save-code-close');
         const applyButton = document.getElementById('save-code-apply');
         const text = document.getElementById('save-code-text');
+        const cheatInput = document.getElementById('cheat-code-input');
+        const cheatButton = document.getElementById('cheat-code-apply');
 
         syncUsernameInput();
         usernameInput?.addEventListener('change', () => {
@@ -241,6 +257,18 @@
         usernameInput?.addEventListener('blur', () => usernameInput.value = getUsername());
         exportButton?.addEventListener('click', () => openSavePanel('export'));
         importButton?.addEventListener('click', () => openSavePanel('import'));
+        cheatButton?.addEventListener('click', async () => {
+            try {
+                const result = await window.BobaCheats?.applyCheatCode?.(cheatInput?.value || '');
+                setProfileMessage(result?.message || 'Cheat applied.', true);
+                if (cheatInput) cheatInput.value = '';
+            } catch (error) {
+                setProfileMessage(error.message || 'Invalid cheat code.', false);
+            }
+        });
+        cheatInput?.addEventListener('keydown', event => {
+            if (event.key === 'Enter') cheatButton?.click();
+        });
         closeButton?.addEventListener('click', closeSavePanel);
         applyButton?.addEventListener('click', () => {
             try {
@@ -273,6 +301,7 @@
         getApiUrl: () => apiUrl,
         setApiUrl,
         getLastLeaderboardSubmit: () => lastLeaderboardSubmit,
+        resetLeaderboard,
         exportSaveCode,
         importSaveCode,
         setProfileToolsVisible

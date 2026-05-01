@@ -83,14 +83,15 @@
             padding: 12px;
             border: 2px solid var(--boba-aqua);
             border-radius: 8px;
-            background: rgba(7, 17, 29, 0.96);
-            box-shadow: 0 0 28px rgba(88, 221, 255, 0.22);
+            background: rgba(12, 34, 52, 0.88);
+            box-shadow: 0 0 28px rgba(88, 221, 255, 0.30), inset 0 0 24px rgba(255, 255, 255, 0.04);
         }
         .profile-name {
             display: grid;
             gap: 4px;
         }
-        .profile-name label {
+        .profile-name label,
+        .cheat-code-box label {
             color: var(--boba-aqua);
             font-size: 10px;
             font-weight: 900;
@@ -101,7 +102,7 @@
             border: 2px solid rgba(56, 217, 255, 0.7);
             border-radius: 8px;
             color: var(--boba-cream);
-            background: rgba(10, 18, 28, 0.96);
+            background: rgba(13, 32, 48, 0.90);
             outline: none;
             box-shadow: 0 0 18px rgba(88, 221, 255, 0.14);
         }
@@ -110,6 +111,28 @@
             padding: 0 10px;
             font-weight: 900;
         }
+        .cheat-code-box {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-column: 1 / -1;
+            gap: 8px;
+            align-items: end;
+        }
+        .cheat-code-box label {
+            grid-column: 1 / -1;
+            color: var(--boba-gold);
+        }
+        #cheat-code-input {
+            min-height: 38px;
+            border: 2px solid rgba(255, 216, 111, 0.72);
+            border-radius: 8px;
+            padding: 0 10px;
+            color: var(--boba-cream);
+            background: rgba(13, 32, 48, 0.90);
+            outline: none;
+            font-weight: 900;
+            box-shadow: 0 0 18px rgba(255, 216, 111, 0.12);
+        }
         #profile-tools button,
         .save-code-actions button {
             min-height: 38px;
@@ -117,7 +140,7 @@
             border-radius: 8px;
             padding: 0 12px;
             color: var(--boba-cream);
-            background: rgba(16, 35, 53, 0.94);
+            background: rgba(22, 62, 88, 0.90);
             font-weight: 900;
             cursor: pointer;
             transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
@@ -151,7 +174,7 @@
             padding: 18px;
             color: var(--boba-cream);
             font-family: Arial, sans-serif;
-            background: rgba(3, 6, 12, 0.76);
+            background: rgba(3, 6, 12, 0.52);
         }
         #save-code-panel.hidden {
             display: none;
@@ -161,8 +184,8 @@
             border: 2px solid var(--boba-aqua);
             border-radius: 8px;
             padding: 18px;
-            background: rgba(10, 18, 28, 0.98);
-            box-shadow: 0 0 34px rgba(88, 221, 255, 0.20);
+            background: rgba(13, 32, 48, 0.92);
+            box-shadow: 0 0 34px rgba(88, 221, 255, 0.30), inset 0 0 24px rgba(255, 255, 255, 0.04);
         }
         .save-code-card h2 {
             margin-bottom: 10px;
@@ -205,6 +228,11 @@
         </div>
         <button id="save-export" type="button">EXPORT</button>
         <button id="save-import" type="button">IMPORT</button>
+        <div class="cheat-code-box">
+            <label for="cheat-code-input">CHEAT CODE</label>
+            <input id="cheat-code-input" maxlength="32" autocomplete="off" spellcheck="false" placeholder="ENTER CODE">
+            <button id="cheat-code-apply" type="button">APPLY</button>
+        </div>
         <div id="profile-message" role="status" aria-live="polite"></div>
     </div>
     <div id="save-code-panel" class="hidden">
