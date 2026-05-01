@@ -218,6 +218,13 @@
         document.getElementById('save-code-panel')?.classList.add('hidden');
     }
 
+    function setProfileToolsVisible(visible) {
+        document.getElementById('profile-tools')?.classList.toggle('hidden', !visible);
+        if (visible) {
+            syncUsernameInput();
+        }
+    }
+
     function bindProfileTools() {
         const usernameInput = document.getElementById('profile-username');
         const exportButton = document.getElementById('save-export');
@@ -267,6 +274,7 @@
         setApiUrl,
         getLastLeaderboardSubmit: () => lastLeaderboardSubmit,
         exportSaveCode,
-        importSaveCode
+        importSaveCode,
+        setProfileToolsVisible
     };
 }());

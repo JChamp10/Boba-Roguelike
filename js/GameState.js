@@ -47,7 +47,7 @@ const GameState = {
             this.level++;
             levelsGained++;
             this.pendingLevelUps++;
-            if (this.level % 5 === 0) {
+            if (globalThis.BOBA_SPECIAL_DRAFT_ENABLED && this.level % 5 === 0) {
                 this.pendingSpecialUpgrades++;
             }
             this.xpToLevel = Math.floor(this.xpToLevel * 1.35);

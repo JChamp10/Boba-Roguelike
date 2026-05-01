@@ -16,6 +16,8 @@ const LYCHEE_PROJECTILE_LIFESPAN_MS = 1200;
 const BUILD_ABILITY_DURATION_MS = 4200;
 const CHARACTER_UNLOCK_COST_STEP = 1000000;
 const GUN_UNLOCK_COST_STEP = 500000;
+const SPECIAL_DRAFT_ENABLED = false;
+globalThis.BOBA_SPECIAL_DRAFT_ENABLED = SPECIAL_DRAFT_ENABLED;
 
 // BUILD SETUP: swap the texture keys here after you add custom character/weapon assets.
 // For new files, add them to BOOT_IMAGE_ASSETS below, then point playerTexture/gunTexture/projectileTexture at the new keys.
@@ -102,6 +104,7 @@ const GUN_OPTIONS = [
         spread: 0.95,
         damageMultiplier: 0.42,
         fireRateMultiplier: 1.45,
+        reloadDurationMultiplier: 2,
         weaponType: 'strawberryShotgun',
         synergy: 'Closer hits land harder; SPACE increases pellet pressure.',
         accent: 0xff6f9f
@@ -535,7 +538,7 @@ const BRANCH_VISUALS = {
     pierce: { accent: BOBA_THEME.taro, glow: 0x2b1543, label: 'TARO STRAW' },
     bounce: { accent: BOBA_THEME.caramel, glow: 0x422d08, label: 'CARAMEL RICOCHET' },
     shot: { accent: BOBA_THEME.lychee, glow: 0x3f1426, label: 'PEARL STORM' },
-    special: { accent: BOBA_THEME.aqua, glow: 0x0b2a44, label: 'GACHA CORE' },
+    special: { accent: BOBA_THEME.aqua, glow: 0x0b2a44, label: 'SPECIAL CORE' },
     machine: { accent: BOBA_THEME.caramel, glow: 0x30200a, label: 'SHOP MACHINE' },
     boost: { accent: BOBA_THEME.cream, glow: 0x33240f, label: 'STAMP CARD' },
     runboost: { accent: BOBA_THEME.danger, glow: 0x3d080e, label: 'RUN BOOST' },
@@ -603,6 +606,7 @@ function buildWeightedUpgradeChoices() {
 }
 
 function buildSpecialUpgradeChoices() {
+    if (!SPECIAL_DRAFT_ENABLED) return [];
     const pool = SPECIAL_UPGRADES.filter(upgrade => !hasUpgrade(upgrade.id));
     const chosen = [];
     while (chosen.length < 3 && pool.length > 0) {
@@ -1507,122 +1511,45 @@ class MenuScene extends Phaser.Scene {
 
         this.createMenuBackdrop();
 
-        createNeonPanel(this, 140, 126, 176, 168, BRANCH_VISUALS.speed, 0.9);
-        this.tapiocaText = this.add.text(116, 74, '', { fontSize: '15px', fill: '#7ed2ff', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.rageBankText = this.add.text(116, 122, '', { fontSize: '15px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.killText = this.add.text(116, 170, '', { fontSize: '15px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.add.image(88, 74, 'player_boba').setScale(0.045);
-        this.add.text(88, 122, 'R', { fontSize: '22px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.add.text(88, 170, 'K', { fontSize: '22px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.add.rectangle(140, 98, 144, 1, 0x536784, 0.45);
-        this.add.rectangle(140, 146, 144, 1, 0x536784, 0.45);
-
-        this.add.text(GAME_CENTER_X, 54, 'BOBA', {
+        this.add.text(372, 70, 'BOBA', {
             fontSize: '60px', fill: '#fff4d6', fontFamily: 'Arial Black',
             stroke: '#7a4f15', strokeThickness: 5
-        }).setOrigin(0.5);
-        this.add.text(GAME_CENTER_X, 108, 'ROGUELIKE', {
+        }).setOrigin(0, 0.5);
+        this.add.text(372, 126, 'ROGUELIKE', {
             fontSize: '46px', fill: '#83f28f', fontFamily: 'Arial Black',
             stroke: '#143c28', strokeThickness: 5
-        }).setOrigin(0.5);
-        this.add.text(GAME_CENTER_X, 148, 'BUILD YOUR IDLE FACTORY, SURVIVE ENDLESS WAVES, AND GROW YOUR PERMANENT BUILD.', {
+        }).setOrigin(0, 0.5);
+        this.add.text(376, 168, 'BUILD A WEIRD BOBA, SURVIVE WAVES, BANK TAPIOCA.', {
             fontSize: '12px', fill: '#c2c2b8', fontFamily: 'Courier New'
-        }).setOrigin(0.5);
+        }).setOrigin(0, 0.5);
 
-        this.makeTopIconButton(826, 86, 'Controls', () => this.scene.launch('ControlsScene'));
-        this.makeTopIconButton(936, 86, 'Upgrades', () => this.scene.start('PermaUpgradeScene'));
-        this.makeTopIconButton(1046, 86, 'Factory', () => this.scene.start('IdleFactoryScene'));
+        this.createMenuStatStrip(148, 134);
+        this.createMenuActionRail(168, 440);
 
-        createNeonPanel(this, 260, 414, 300, 378, BRANCH_VISUALS.health, 0.93);
-        createNeonPanel(this, 600, 414, 338, 378, BRANCH_VISUALS.speed, 0.94);
-        createNeonPanel(this, 940, 414, 300, 378, BRANCH_VISUALS.pierce, 0.94);
-
-        this.add.text(260, 246, 'FACTORY PREVIEW', {
+        this.add.circle(594, 410, 196, BOBA_THEME.aqua, 0.08).setStrokeStyle(3, BOBA_THEME.aqua, 0.38);
+        this.add.circle(594, 410, 138, BOBA_THEME.caramel, 0.08).setStrokeStyle(2, BOBA_THEME.caramel, 0.28);
+        this.add.rectangle(594, 462, 470, 2, BOBA_THEME.aqua, 0.26);
+        this.buildNameText = this.add.text(594, 238, '', {
             fontSize: '18px',
-            fill: '#74c174',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-        this.add.rectangle(260, 380, 236, 162, 0x06140f, 0.82).setStrokeStyle(2, BOBA_THEME.matcha, 0.48);
-        this.add.circle(260, 404, 84, BOBA_THEME.matcha, 0.10).setStrokeStyle(2, BOBA_THEME.matcha, 0.20);
-        this.charPreview = this.add.image(260, 374, 'player_boba').setScale(0.22);
-        createPanel(this, 260, 526, 236, 82, 0x0b2118, BOBA_THEME.matcha, 0.94);
-        this.add.text(260, 526, 'Your idle factory keeps\nmaking tapioca during\nmenus and runs.', {
-            fontSize: '13px',
-            fill: '#cfe7c4',
-            align: 'center',
-            lineSpacing: 5
-        }).setOrigin(0.5);
-
-        this.add.text(600, 246, 'CURRENT BUILD', {
-            fontSize: '18px',
-            fill: '#ffe7aa',
-            fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-        this.buildNameText = this.add.text(600, 304, '', {
-            fontSize: '14px',
             fill: '#fff4d6',
             align: 'center',
             fontFamily: 'Arial Black',
-            wordWrap: { width: 290 }
+            wordWrap: { width: 410 }
         }).setOrigin(0.5);
-        this.buildCharacterPreview = this.add.image(534, 410, 'player_boba').setDepth(2);
-        this.buildGunPreview = this.add.image(676, 410, 'boba_gun').setDepth(2);
-        this.add.rectangle(600, 410, 248, 154, 0x07121d, 0.78).setStrokeStyle(2, BOBA_THEME.aqua, 0.45);
-        this.runHintText = this.add.text(600, 536, 'Open character select to change your boba and weapon.', {
-            fontSize: '11px',
+        this.buildCharacterPreview = this.add.image(514, 404, 'player_boba').setDepth(2);
+        this.buildGunPreview = this.add.image(694, 404, 'boba_gun').setDepth(2);
+        this.runHintText = this.add.text(594, 548, 'Open character select to change your boba and weapon.', {
+            fontSize: '13px',
             fill: '#c2cbda',
             align: 'center',
-            wordWrap: { width: 285 },
+            wordWrap: { width: 430 },
             lineSpacing: 4
         }).setOrigin(0.5);
-        this.makeButton(600, 598, 'CHARACTER SELECT', () => {
+        this.makeButton(594, 620, 'CHARACTER SELECT', () => {
             this.scene.start('BuildSelectScene');
-        }, 0xffd86f, 0x3a2b12, 236);
+        }, 0xffd86f, 0x3a2b12, 248);
 
-        this.createLeaderboardPanel(940, 414);
-
-        this.makeButton(210, 660, 'START GAME', () => startFreshRunFromMenu(this), 0x66c878, 0x153a20, 180);
-
-        this.makeButton(420, 660, 'UPGRADES', () => {
-            this.scene.start('PermaUpgradeScene');
-        }, 0x5db8e8, 0x102f42, 180);
-
-        this.makeButton(630, 660, 'CONTROLS', () => {
-            this.scene.launch('ControlsScene');
-        }, 0xc99af7, 0x2b1d40, 180);
-
-        this.makeButton(850, 660, 'IDLE FACTORY', () => {
-            this.scene.start('IdleFactoryScene');
-        }, 0xf0b14b, 0x442c0c, 200);
-
-        createNeonPanel(this, GAME_CENTER_X, 728, 720, 46, BRANCH_VISUALS.speed, 0.9);
-        this.add.text(310, 728, 'VOLUME', { fontSize: '14px', fill: '#c2c2b8', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.volumeSlider = this.add.rectangle(420, 728, 220, 8, 0x293449).setOrigin(0, 0.5);
-        this.volumeFill = this.add.rectangle(420, 728, GameState.volume * 220, 8, 0x5bbcff).setOrigin(0, 0.5);
-        this.volumePercent = this.add.text(660, 728, '', { fontSize: '14px', fill: '#d5e4ff' }).setOrigin(0, 0.5);
-
-        this.add.text(744, 728, 'AIM MODE', { fontSize: '14px', fill: '#c2c2b8', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.aimModeBtn = this.add.rectangle(880, 728, 110, 24, 0x0d324a, 0.96)
-            .setStrokeStyle(2, 0x4fa3da)
-            .setInteractive({ useHandCursor: true });
-        this.aimModeLabel = this.add.text(880, 728, '', { fontSize: '13px', fill: '#9fd7ff', fontFamily: 'Arial Black' }).setOrigin(0.5);
-        this.aimModeBtn.on('pointerover', () => this.aimModeBtn.setFillStyle(0x164b6c, 0.96));
-        this.aimModeBtn.on('pointerout', () => this.aimModeBtn.setFillStyle(0x0d324a, 0.96));
-        this.aimModeBtn.on('pointerdown', () => {
-            GameState.aimMode = GameState.aimMode === 'manual' ? 'auto' : 'manual';
-            SaveManager.save();
-            this.updateDisplays();
-        });
-
-        this.input.on('pointerdown', (ptr) => {
-            if (ptr.y > 718 && ptr.y < 738 && ptr.x > 420 && ptr.x < 640) {
-                const vol = Math.max(0, Math.min(1, (ptr.x - 420) / 220));
-                GameState.volume = vol;
-                this.volumeFill.width = vol * 220;
-                this.volumePercent.setText(String(Math.floor(GameState.volume * 100)) + '%');
-                this.scene.get('ControlsScene')?.events.emit('volumechange', vol);
-            }
-        });
+        this.createLeaderboardPanel(982, 442);
 
         this.saveTimer = this.time.addEvent({
             delay: 30000,
@@ -1680,7 +1607,44 @@ class MenuScene extends Phaser.Scene {
             skyline.lineBetween(0, y, GAME_WIDTH, y);
         }
         this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0.025);
-        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 1080, 680, 0x000000, BOBA_THEME.aqua, 0.08);
+        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, 1080, 680, 0x000000, 0.05).setStrokeStyle(2, BOBA_THEME.aqua, 0.42);
+    }
+
+    createMenuStatStrip(x, y) {
+        createNeonPanel(this, x, y, 224, 186, BRANCH_VISUALS.speed, 0.86);
+        this.tapiocaText = this.add.text(x - 62, y - 56, '', { fontSize: '16px', fill: '#7ed2ff', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.rageBankText = this.add.text(x - 62, y, '', { fontSize: '16px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.killText = this.add.text(x - 62, y + 56, '', { fontSize: '16px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.add.image(x - 92, y - 56, 'player_boba').setScale(0.047);
+        this.add.text(x - 92, y, 'R', { fontSize: '24px', fill: '#ff9f80', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        this.add.text(x - 92, y + 56, 'K', { fontSize: '24px', fill: '#ffd27a', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        this.add.rectangle(x, y - 28, 170, 1, 0x536784, 0.45);
+        this.add.rectangle(x, y + 28, 170, 1, 0x536784, 0.45);
+    }
+
+    createMenuActionRail(x, y) {
+        createNeonPanel(this, x, y, 250, 370, BRANCH_VISUALS.health, 0.9);
+        this.add.text(x, y - 142, 'RUN MENU', {
+            fontSize: '20px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+
+        const actions = [
+            { text: 'START GAME', y: y - 82, cb: () => startFreshRunFromMenu(this), accent: 0x66c878, fill: 0x153a20 },
+            { text: 'UPGRADES', y: y - 18, cb: () => this.scene.start('PermaUpgradeScene'), accent: 0x5db8e8, fill: 0x102f42 },
+            { text: 'IDLE FACTORY', y: y + 46, cb: () => this.scene.start('IdleFactoryScene'), accent: 0xf0b14b, fill: 0x442c0c },
+            { text: 'SETTINGS', y: y + 110, cb: () => this.scene.launch('ControlsScene'), accent: 0xc99af7, fill: 0x2b1d40 }
+        ];
+        actions.forEach(action => this.makeButton(x, action.y, action.text, action.cb, action.accent, action.fill, 198));
+
+        this.add.text(x, y + 154, 'Settings has controls, volume, aim mode, and saves.', {
+            fontSize: '10px',
+            fill: '#9fb3d9',
+            align: 'center',
+            wordWrap: { width: 196 },
+            lineSpacing: 3
+        }).setOrigin(0.5);
     }
 
     makeTopIconButton(x, y, text, callback) {
@@ -2439,6 +2403,7 @@ class PermaUpgradeScene extends Phaser.Scene {
                 this.shopCards.push(this.createMainMenuUpgradeCard(startX + (index * spacing), row.y, upgrade, compact));
             });
         });
+        this.createFutureBoostBay(1036, 520);
 
         this.detailText = this.add.text(GAME_CENTER_X, 690, '', {
             fontSize: '14px',
@@ -2454,6 +2419,55 @@ class PermaUpgradeScene extends Phaser.Scene {
         });
 
         this.updateUpgradeShop();
+    }
+
+    createFutureBoostBay(x, y) {
+        createNeonPanel(this, x, y, 230, 232, BRANCH_VISUALS.special, 0.92);
+        this.add.text(x, y - 92, 'BOOST BAY', {
+            fontSize: '18px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#143c44',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+        this.add.text(x, y - 66, 'FUTURE SLOTS', {
+            fontSize: '10px',
+            fill: '#7ee0ff',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+
+        [
+            { label: 'PETS', icon: 'PET', color: BOBA_THEME.matcha },
+            { label: 'CHARMS', icon: 'CHM', color: BOBA_THEME.caramel },
+            { label: 'AURAS', icon: 'AUR', color: BOBA_THEME.lychee }
+        ].forEach((slot, index) => {
+            this.createFutureBoostSlot(x, y - 22 + (index * 56), slot);
+        });
+    }
+
+    createFutureBoostSlot(x, y, slot) {
+        this.add.rectangle(x, y, 184, 42, 0x07121d, 0.86).setStrokeStyle(2, slot.color, 0.68);
+        this.add.rectangle(x - 74, y, 34, 28, slot.color, 0.16).setStrokeStyle(2, slot.color, 0.82);
+        this.add.text(x - 74, y, slot.icon, {
+            fontSize: '10px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        this.add.text(x - 44, y - 8, slot.label, {
+            fontSize: '12px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0, 0.5);
+        this.add.text(x - 44, y + 10, 'LOCKED', {
+            fontSize: '10px',
+            fill: '#9fb3d9',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0, 0.5);
+        this.add.text(x + 70, y, 'SOON', {
+            fontSize: '10px',
+            fill: '#ffd86f',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
     }
 
     createMainMenuUpgradeCard(x, y, upgrade, compact = false) {
@@ -2558,7 +2572,7 @@ class PermaUpgradeScene extends Phaser.Scene {
 }
 
 // ============================================
-// CONTROLS SCENE (Overlay)
+// SETTINGS SCENE (Overlay)
 // ============================================
 class ControlsScene extends Phaser.Scene {
     constructor() {
@@ -2566,38 +2580,101 @@ class ControlsScene extends Phaser.Scene {
     }
 
     create() {
-        drawSceneBackdrop(this, 0x406694);
-        createPanel(this, 400, 300, 620, 420, 0x131a2a, 0x536784, 0.95);
+        window.BobaAuth?.setProfileToolsVisible?.(true);
+        this.events.once('shutdown', () => window.BobaAuth?.setProfileToolsVisible?.(false));
 
-        this.add.text(400, 150, 'CONTROLS', {
-            fontSize: '36px', fill: '#fff4d6', fontFamily: 'Arial Black'
+        drawSceneBackdrop(this, 0x62408e);
+        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 780, 560, 0x111827, 0x8d6bd8, 0.96);
+        createNeonPanel(this, 370, 360, 330, 300, BRANCH_VISUALS.speed, 0.9);
+        createNeonPanel(this, 780, 360, 330, 300, BRANCH_VISUALS.taro || BRANCH_VISUALS.pierce, 0.9);
+
+        this.add.text(GAME_CENTER_X, 116, 'SETTINGS', {
+            fontSize: '40px', fill: '#fff4d6', fontFamily: 'Arial Black',
+            stroke: '#3b2457', strokeThickness: 4
+        }).setOrigin(0.5);
+        this.add.text(GAME_CENTER_X, 156, 'PROFILE TOOLS ARE BELOW THIS PANEL.', {
+            fontSize: '11px', fill: '#b8eaff', fontFamily: 'Courier New'
         }).setOrigin(0.5);
 
         const controls = [
             'WASD - Move',
             GameState.aimMode === 'manual' ? 'MANUAL AIM - HOLD/CLICK TO FIRE' : 'AUTO AIM - TRACKS ENEMIES',
             'AUTO-FIRE',
-            'ESC - Pause',
-            '',
-            'Survive the run.',
-            'TC buys run upgrades.',
-            'Rage upgrades the idle factory.',
-            'Kills give TC, rage, XP, and sometimes pickups.',
-            'Spend tapioca on menu upgrades between runs.'
+            'SPACE - Ability',
+            'ESC - Pause'
         ];
 
+        this.add.text(370, 238, 'CONTROLS', {
+            fontSize: '20px', fill: '#fff4d6', fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
         controls.forEach((line, i) => {
-            this.add.text(400, 230 + i * 35, line, {
-                fontSize: '22px', fill: '#d5e4ff'
-            }).setOrigin(0.5);
+            this.add.text(224, 286 + i * 36, line, {
+                fontSize: '15px',
+                fill: i === 1 ? '#ffd86f' : '#d5e4ff',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0, 0.5);
         });
 
-        const closeBtn = this.add.image(400, 500, 'btn').setInteractive({ useHandCursor: true });
-        const closeLabel = this.add.text(400, 500, 'CLOSE', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
+        this.add.text(780, 238, 'GAME FEEL', {
+            fontSize: '20px', fill: '#fff4d6', fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        this.add.text(632, 296, 'VOLUME', { fontSize: '14px', fill: '#c2c2b8', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.volumeSlider = this.add.rectangle(730, 296, 230, 10, 0x293449).setOrigin(0, 0.5).setStrokeStyle(1, BOBA_THEME.aqua, 0.4);
+        this.volumeFill = this.add.rectangle(730, 296, GameState.volume * 230, 10, 0x5bbcff).setOrigin(0, 0.5);
+        this.volumePercent = this.add.text(986, 296, '', { fontSize: '14px', fill: '#d5e4ff' }).setOrigin(0.5);
+        this.volumeHit = this.add.rectangle(845, 296, 250, 34, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+        this.volumeHit.on('pointerdown', pointer => this.setVolumeFromPointer(pointer));
+        this.volumeHit.on('pointermove', pointer => {
+            if (pointer.isDown) this.setVolumeFromPointer(pointer);
+        });
+
+        this.add.text(632, 364, 'AIM MODE', { fontSize: '14px', fill: '#c2c2b8', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.aimModeBtn = this.add.rectangle(854, 364, 180, 42, 0x0d324a, 0.96)
+            .setStrokeStyle(2, 0x4fa3da)
+            .setInteractive({ useHandCursor: true });
+        this.aimModeLabel = this.add.text(854, 364, '', { fontSize: '15px', fill: '#9fd7ff', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        this.aimModeBtn.on('pointerover', () => this.aimModeBtn.setFillStyle(0x164b6c, 0.96));
+        this.aimModeBtn.on('pointerout', () => this.aimModeBtn.setFillStyle(0x0d324a, 0.96));
+        this.aimModeBtn.on('pointerdown', () => {
+            GameState.aimMode = GameState.aimMode === 'manual' ? 'auto' : 'manual';
+            SaveManager.save();
+            this.refreshSettings();
+        });
+
+        this.add.text(780, 446, 'Leaderboard name and save import/export live in the profile box below.', {
+            fontSize: '12px',
+            fill: '#d9c8ff',
+            align: 'center',
+            wordWrap: { width: 286 },
+            lineSpacing: 5
+        }).setOrigin(0.5);
+
+        const closeBtn = this.add.image(GAME_CENTER_X, 620, 'btn').setInteractive({ useHandCursor: true });
+        const closeLabel = this.add.text(GAME_CENTER_X, 620, 'CLOSE', { fontSize: '18px', fill: '#fff', fontFamily: 'Arial Black' }).setOrigin(0.5);
 
         closeBtn.on('pointerover', () => closeBtn.setTexture('btn_hover'));
         closeBtn.on('pointerout', () => closeBtn.setTexture('btn'));
         closeBtn.on('pointerdown', () => this.scene.stop());
+        closeLabel.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.scene.stop());
+
+        this.input.keyboard.once('keydown-ESC', () => this.scene.stop());
+        this.refreshSettings();
+    }
+
+    setVolumeFromPointer(pointer) {
+        const vol = Phaser.Math.Clamp((pointer.x - 730) / 230, 0, 1);
+        GameState.volume = vol;
+        SaveManager.save();
+        this.refreshSettings();
+        this.events.emit('volumechange', vol);
+    }
+
+    refreshSettings() {
+        if (this.volumeFill) {
+            this.volumeFill.width = GameState.volume * 230;
+        }
+        this.volumePercent?.setText(String(Math.floor(GameState.volume * 100)) + '%');
+        this.aimModeLabel?.setText(GameState.aimMode === 'manual' ? 'MANUAL' : 'AUTO');
     }
 }
 
@@ -2997,8 +3074,9 @@ class GameScene extends Phaser.Scene {
         }
         this.bobaCount = this.maxBobaCount;
         this.isReloading = false;
+        this.reloadToken = 0;
         this.reloadDuration = Math.max(250, Math.floor(1000 / (1 + this.permaReloadSpeedBonus)));
-        this.reloadDuration *= this.weaponType === 'matchaOrb' ? (this.weaponProfile?.reloadDurationMultiplier || 1) : 1;
+        this.reloadDuration *= this.weaponProfile?.reloadDurationMultiplier || 1;
         if (this.weaponType === 'tigerBlade') {
             this.reloadDuration *= 2;
         }
@@ -3196,6 +3274,10 @@ class GameScene extends Phaser.Scene {
         this.dashUntil = time + 210;
         this.player.body.setVelocity(dir.x * 760, dir.y * 760);
         this.player.setTint(0x9dfff2);
+        if (this.buildAbilityType === 'classicDash') {
+            this.reloadAmmoFromAbility();
+            this.createAbilityScreenTinge(0x7efcff, 360, 0.18);
+        }
         this.playDashRoll(dir);
         this.createDashEffect(dir);
         this.applyDashKnockback(dir);
@@ -3217,6 +3299,7 @@ class GameScene extends Phaser.Scene {
             this.fireRateBoostUntil = this.abilityActiveUntil;
             this.fireRateBoostMultiplier = 1.85;
             this.createAbilityPulse(0xff6f9f, 96);
+            this.createAbilityScreenTinge(0xff6f9f, BUILD_ABILITY_DURATION_MS, 0.12);
         } else if (this.buildAbilityType === 'zenGarden') {
             this.createTimedDamageZone(this.player.x, this.player.y, 120, 0x83f28f, 0.12, this.abilityActiveUntil, {
                 followPlayer: true,
@@ -3225,6 +3308,7 @@ class GameScene extends Phaser.Scene {
             });
             this.matchaOrbDurationBoostUntil = time + 7000;
             this.createAbilityPulse(0x83f28f, 128);
+            this.createAbilityScreenTinge(0x83f28f, BUILD_ABILITY_DURATION_MS, 0.10);
         } else if (this.buildAbilityType === 'crystalFocus') {
             this.accuracyBoostUntil = this.abilityActiveUntil;
             this.fireRateBoostUntil = this.abilityActiveUntil;
@@ -3239,6 +3323,7 @@ class GameScene extends Phaser.Scene {
                 this.enemies?.children.entries.forEach(enemy => { if (enemy.active) enemy.clearTint(); });
             });
             this.createAbilityPulse(0x8ee8ff, 112);
+            this.createAbilityScreenTinge(0x8ee8ff, BUILD_ABILITY_DURATION_MS, 0.13);
         } else if (this.buildAbilityType === 'tigerFocus') {
             this.tigerDamageBoostUntil = this.abilityActiveUntil;
             this.player.setTint(0xffd36a);
@@ -3248,6 +3333,7 @@ class GameScene extends Phaser.Scene {
                 }
             });
             this.createAbilityPulse(0xffb14f, 132);
+            this.createAbilityScreenTinge(0xffb14f, BUILD_ABILITY_DURATION_MS, 0.12);
         }
         this.updateUI();
     }
@@ -3277,6 +3363,27 @@ class GameScene extends Phaser.Scene {
             ease: 'Sine.easeOut',
             onComplete: () => pulse.destroy()
         });
+    }
+
+    createAbilityScreenTinge(color, duration = 420, alpha = 0.12) {
+        const overlay = this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, color, alpha)
+            .setDepth(1.5)
+            .setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({
+            targets: overlay,
+            alpha: 0,
+            duration,
+            ease: 'Sine.easeOut',
+            onComplete: () => overlay.destroy()
+        });
+    }
+
+    reloadAmmoFromAbility() {
+        this.reloadToken++;
+        this.bobaCount = this.maxBobaCount;
+        this.isReloading = false;
+        this.reloadText?.setVisible(false);
+        this.updateBobaDisplay();
     }
 
     getDashDirection() {
@@ -3361,10 +3468,9 @@ class GameScene extends Phaser.Scene {
             }
         });
         if (dashedThroughEnemy && this.buildAbilityType === 'classicDash') {
-            this.bobaCount = this.maxBobaCount;
+            this.reloadAmmoFromAbility();
             this.fireRateBoostUntil = this.time.now + 1800;
             this.fireRateBoostMultiplier = 1.65;
-            this.reloadText.setVisible(false);
         }
     }
 
@@ -3654,6 +3760,9 @@ class GameScene extends Phaser.Scene {
 
     maybeLaunchLevelUpgrade() {
         if (GameState.pendingLevelUps <= 0 || GameState.upgradeSceneActive) return;
+        if (!SPECIAL_DRAFT_ENABLED) {
+            GameState.pendingSpecialUpgrades = 0;
+        }
         if (buildWeightedUpgradeChoices().length === 0 && buildSpecialUpgradeChoices().length === 0) {
             GameState.pendingLevelUps = 0;
             GameState.pendingSpecialUpgrades = 0;
@@ -4194,9 +4303,10 @@ class GameScene extends Phaser.Scene {
         if (this.isReloading || this.playerDown) return;
         this.isReloading = true;
         this.reloadText.setVisible(true);
+        const token = ++this.reloadToken;
 
         this.time.delayedCall(this.reloadDuration, () => {
-            if (this.playerDown) return;
+            if (this.playerDown || token !== this.reloadToken) return;
             this.bobaCount = this.maxBobaCount;
             this.isReloading = false;
             this.reloadText.setVisible(false);
@@ -4723,7 +4833,7 @@ class UpgradeScene extends Phaser.Scene {
         }
 
         this.cards = [];
-        this.add.text(GAME_CENTER_X, 142, this.isSpecialDraft ? 'PICK A GACHA CORE' : 'PICK A BOBA MOD', {
+        this.add.text(GAME_CENTER_X, 142, this.isSpecialDraft ? 'PICK A SPECIAL CORE' : 'PICK A BOBA MOD', {
             fontSize: '34px',
             fill: '#fff4d6',
             fontFamily: 'Arial Black',
