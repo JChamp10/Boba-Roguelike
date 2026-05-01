@@ -14,6 +14,7 @@ const IDLE_RUN_TAPIOCA_TICK_MS = 1000;
 const PER_RUN_DAMAGE_BOOST_PERCENT = 0.05;
 const LYCHEE_PROJECTILE_LIFESPAN_MS = 1200;
 const BUILD_ABILITY_DURATION_MS = 4200;
+const ENEMY_BASE_HEALTH = 30;
 const CHARACTER_UNLOCK_COST_STEP = 1000000;
 const GUN_UNLOCK_COST_STEP = 500000;
 const SPECIAL_DRAFT_ENABLED = false;
@@ -556,6 +557,54 @@ const PERMA_STORE_VISUALS = {
     menuXpBonus: { theme: 'speed', tag: 'RUN BOOST', icon: 'XP', main: '+5%', sub: 'XP gain' }
 };
 
+const BOOST_BAY_DATA = [
+    {
+        id: 'pets',
+        title: 'PETS',
+        icon: 'PET',
+        color: BOBA_THEME.matcha,
+        subtitle: 'Companions that act on their own',
+        items: [
+            { name: 'Tapioca Slime', text: 'Follows enemies, explodes for 50 damage, leaves sticky slowing puddles, then respawns.' },
+            { name: 'Lychee Drone', text: 'Floats above you and fires 10 damage tracking shots at low-health enemies.' },
+            { name: 'Matcha Spirit', text: 'Charges for 3 seconds, then releases a 20 damage beam synced with your attacks.' },
+            { name: 'Tiger Cub', text: 'Dashes between enemies and marks targets so they take 1.5x follow-up damage.' },
+            { name: 'Sugar Ghost', text: 'Phases through enemies and duplicates your attacks every 3 seconds.' },
+            { name: 'Boba Magnet Crab', text: 'Collects drops around the arena and brings them back to you.' }
+        ]
+    },
+    {
+        id: 'charms',
+        title: 'CHARMS',
+        icon: 'CHM',
+        color: BOBA_THEME.caramel,
+        subtitle: 'Rule-breaking modifiers',
+        items: [
+            { name: 'Fracture Charm', text: 'Projectiles split once into two 75% damage shards.' },
+            { name: 'Reversal Charm', text: 'Some attacks automatically fire backwards.' },
+            { name: 'Boomerang Charm', text: '1 in 7 expired shots boomerang back, hit enemies, and refund 1 ammo.' },
+            { name: 'Phase Charm', text: 'Attacks have a 50% chance to ignore an enemy and keep piercing.' },
+            { name: 'Delay Charm', text: 'Hits explode after a short delay for 10% of shot damage in an area.' },
+            { name: 'Combo Charm', text: 'Consecutive hits scale effect strength from 1.0x up to 2.0x.' }
+        ]
+    },
+    {
+        id: 'auras',
+        title: 'AURAS',
+        icon: 'AUR',
+        color: BOBA_THEME.lychee,
+        subtitle: 'Constant area effects around the player',
+        items: [
+            { name: 'Gravity Aura', text: 'Slowly pulls enemies toward you.' },
+            { name: 'Pulse Aura', text: 'Emits shockwaves every few seconds that knock back and deal 10 damage.' },
+            { name: 'Freeze Aura', text: 'Nearby enemies slow and can freeze over time.' },
+            { name: 'Burn Aura', text: 'Deals 1 damage per second to enemies in range.' },
+            { name: 'Mirror Aura', text: 'Occasionally spawns phantom attacks at one-third damage.' },
+            { name: 'Chaos Aura', text: 'Each shot has a 1 in 5 chance to trigger a random effect like freeze, burn, slow, split, or lifesteal.' }
+        ]
+    }
+];
+
 function getUpgradeVisualTheme(upgradeOrBranch) {
     const branch = typeof upgradeOrBranch === 'string' ? upgradeOrBranch : upgradeOrBranch?.branch;
     return BRANCH_VISUALS[branch] || BRANCH_VISUALS.boost;
@@ -645,7 +694,7 @@ function getEnemyWaveScale(wave, growth = 0.13) {
 
 function getEnemyMaxHpForWave(wave) {
     const safeWave = Math.max(1, wave);
-    return Math.floor(30 * getEnemyWaveScale(safeWave, 0.14) + ((safeWave - 1) * 3));
+    return Math.floor(ENEMY_BASE_HEALTH * getEnemyWaveScale(safeWave, 0.14) + ((safeWave - 1) * 3));
 }
 
 function getXpPerKill(scene) {
@@ -831,7 +880,7 @@ function forceSceneTransition(scene, targetKey, resetRun = true) {
 
     globalThis.setTimeout(() => {
         try {
-            const menuSideScenes = ['ControlsScene', 'IdleFactoryScene', 'PermaUpgradeScene'];
+            const menuSideScenes = ['ControlsScene', 'IdleFactoryScene', 'PermaUpgradeScene', 'BoostBayScene', 'LeaderboardScene'];
             const scenesToStop = new Set([...RUN_SCENE_KEYS, ...menuSideScenes]);
             if (targetKey === 'MenuScene') {
                 scenesToStop.add('MenuScene');
@@ -874,6 +923,8 @@ function hardSwitchScene(scene, targetKey) {
         if (currentKey !== 'ControlsScene') scenePlugin.stop('ControlsScene');
         if (currentKey !== 'IdleFactoryScene') scenePlugin.stop('IdleFactoryScene');
         if (currentKey !== 'PermaUpgradeScene') scenePlugin.stop('PermaUpgradeScene');
+        if (currentKey !== 'BoostBayScene') scenePlugin.stop('BoostBayScene');
+        if (currentKey !== 'LeaderboardScene') scenePlugin.stop('LeaderboardScene');
     }
 
     scenePlugin.start(targetKey);
@@ -899,10 +950,26 @@ function startFreshRunFromMenu(scene) {
 }
 
 function drawSceneBackdrop(scene, accentColor = 0x2b3357) {
-    scene.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x111522);
-    scene.add.ellipse(230, 96, 420, 210, accentColor, 0.10);
-    scene.add.ellipse(GAME_WIDTH - 160, GAME_HEIGHT - 84, 430, 250, 0xffb16b, 0.08);
+    scene.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x07070c);
+    if (scene.textures.exists('menu_background')) {
+        const bg = scene.add.image(GAME_CENTER_X, GAME_CENTER_Y, 'menu_background').setDepth(0);
+        const source = scene.textures.get('menu_background').getSourceImage();
+        const scale = Math.max(GAME_WIDTH / source.width, GAME_HEIGHT / source.height);
+        bg.setScale(scale);
+        scene.tweens.add({
+            targets: bg,
+            scale: scale * 1.018,
+            duration: 8500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+    }
+    scene.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x080b14, 0.54).setDepth(0.1);
+    scene.add.ellipse(230, 96, 420, 210, accentColor, 0.11).setDepth(0.2);
+    scene.add.ellipse(GAME_WIDTH - 160, GAME_HEIGHT - 84, 430, 250, 0xffb16b, 0.08).setDepth(0.2);
     const grid = scene.add.graphics();
+    grid.setDepth(0.3);
     grid.lineStyle(1, 0x24304c, 0.22);
     for (let x = 0; x < GAME_WIDTH; x += 40) {
         grid.lineBetween(x, 0, x, GAME_HEIGHT);
@@ -1622,11 +1689,13 @@ class MenuScene extends Phaser.Scene {
 
     createMenuActionRail(x, y) {
         const actions = [
-            { text: 'Start', y: y - 96, cb: () => startFreshRunFromMenu(this), accent: 0xfff4d6 },
-            { text: 'Build', y: y - 54, cb: () => this.scene.start('BuildSelectScene'), accent: 0xffd86f },
-            { text: 'Upgrades', y: y - 12, cb: () => this.scene.start('PermaUpgradeScene'), accent: 0x7ed2ff },
-            { text: 'Factory', y: y + 30, cb: () => this.scene.start('IdleFactoryScene'), accent: 0xf0b14b },
-            { text: 'Settings', y: y + 72, cb: () => this.scene.launch('ControlsScene'), accent: 0xc99af7 }
+            { text: 'Start', y: y - 112, cb: () => startFreshRunFromMenu(this), accent: 0xfff4d6 },
+            { text: 'Build', y: y - 70, cb: () => this.scene.start('BuildSelectScene'), accent: 0xffd86f },
+            { text: 'Upgrades', y: y - 28, cb: () => this.scene.start('PermaUpgradeScene'), accent: 0x7ed2ff },
+            { text: 'Boost Bay', y: y + 14, cb: () => this.scene.start('BoostBayScene'), accent: 0x83f28f },
+            { text: 'Leaderboard', y: y + 56, cb: () => this.scene.start('LeaderboardScene'), accent: 0xc99af7 },
+            { text: 'Factory', y: y + 98, cb: () => this.scene.start('IdleFactoryScene'), accent: 0xf0b14b },
+            { text: 'Settings', y: y + 140, cb: () => this.scene.launch('ControlsScene'), accent: 0xff6fb0 }
         ];
         actions.forEach(action => this.makeMenuTextButton(x, action.y, action.text, action.cb, action.accent));
     }
@@ -2457,13 +2526,21 @@ class PermaUpgradeScene extends Phaser.Scene {
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
 
-        [
-            { label: 'PETS', icon: 'PET', color: BOBA_THEME.matcha },
-            { label: 'CHARMS', icon: 'CHM', color: BOBA_THEME.caramel },
-            { label: 'AURAS', icon: 'AUR', color: BOBA_THEME.lychee }
-        ].forEach((slot, index) => {
+        BOOST_BAY_DATA.forEach((slot, index) => {
             this.createFutureBoostSlot(x, y - 22 + (index * 56), slot);
         });
+
+        const open = this.add.rectangle(x, y + 92, 146, 26, 0x123044, 0.92)
+            .setStrokeStyle(2, BOBA_THEME.aqua, 0.9)
+            .setInteractive({ useHandCursor: true });
+        this.add.text(x, y + 92, 'OPEN BAY', {
+            fontSize: '11px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        open.on('pointerover', () => open.setFillStyle(0x1f526a, 0.96));
+        open.on('pointerout', () => open.setFillStyle(0x123044, 0.92));
+        open.on('pointerdown', () => this.scene.start('BoostBayScene'));
     }
 
     createFutureBoostSlot(x, y, slot) {
@@ -2474,7 +2551,7 @@ class PermaUpgradeScene extends Phaser.Scene {
             fill: '#fff7e6',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
-        this.add.text(x - 44, y - 8, slot.label, {
+        this.add.text(x - 44, y - 8, slot.title || slot.label, {
             fontSize: '12px',
             fill: '#fff4d6',
             fontFamily: 'Arial Black'
@@ -2589,6 +2666,172 @@ class PermaUpgradeScene extends Phaser.Scene {
         btn.on('pointerover', () => btn.setTexture('btn_hover'));
         btn.on('pointerout', () => btn.setTexture('btn'));
         btn.on('pointerdown', callback);
+    }
+}
+
+// ============================================
+// BOOST BAY SCENE
+// ============================================
+class BoostBayScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'BoostBayScene' });
+    }
+
+    create() {
+        drawSceneBackdrop(this, 0x3f7a6b);
+        this.selectedCategory = BOOST_BAY_DATA[0].id;
+
+        this.add.text(GAME_CENTER_X, 64, 'BOOST BAY', {
+            fontSize: '42px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#07111d',
+            strokeThickness: 6
+        }).setOrigin(0.5);
+        this.add.text(GAME_CENTER_X, 106, 'Pets, charms, and auras are planned boost families for future builds.', {
+            fontSize: '13px',
+            fill: '#b8eaff',
+            fontFamily: 'Courier New'
+        }).setOrigin(0.5);
+
+        this.tabNodes = [];
+        BOOST_BAY_DATA.forEach((category, index) => {
+            this.createBoostTab(266 + (index * 334), 158, category);
+        });
+
+        createNeonPanel(this, GAME_CENTER_X, 438, 980, 486, BRANCH_VISUALS.special, 0.88);
+        this.contentRoot = this.add.container(0, 0);
+        this.renderBoostCategory();
+
+        this.makeActionButton(220, 740, 'BACK', () => this.scene.start('PermaUpgradeScene'));
+        this.makeActionButton(980, 740, 'MENU', () => this.scene.start('MenuScene'));
+    }
+
+    createBoostTab(x, y, category) {
+        const tab = this.add.rectangle(x, y, 252, 50, 0x07121d, 0.88)
+            .setStrokeStyle(2, category.color, 0.86)
+            .setInteractive({ useHandCursor: true });
+        const label = this.add.text(x, y, `${category.icon}  ${category.title}`, {
+            fontSize: '17px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        tab.on('pointerover', () => tab.setFillStyle(category.color, 0.22));
+        tab.on('pointerout', () => this.refreshBoostTabs());
+        tab.on('pointerdown', () => {
+            this.selectedCategory = category.id;
+            this.renderBoostCategory();
+        });
+        this.tabNodes.push({ tab, label, category });
+        this.refreshBoostTabs();
+    }
+
+    refreshBoostTabs() {
+        this.tabNodes?.forEach(node => {
+            const selected = node.category.id === this.selectedCategory;
+            node.tab.setFillStyle(selected ? node.category.color : 0x07121d, selected ? 0.28 : 0.88);
+            node.tab.setStrokeStyle(selected ? 4 : 2, node.category.color, selected ? 1 : 0.86);
+        });
+    }
+
+    renderBoostCategory() {
+        this.contentRoot?.removeAll(true);
+        this.refreshBoostTabs();
+        const category = BOOST_BAY_DATA.find(item => item.id === this.selectedCategory) || BOOST_BAY_DATA[0];
+
+        this.contentRoot.add(this.add.text(GAME_CENTER_X, 234, category.subtitle.toUpperCase(), {
+            fontSize: '15px',
+            fill: '#ffd86f',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5));
+
+        category.items.forEach((item, index) => {
+            const col = index % 3;
+            const row = Math.floor(index / 3);
+            const x = 244 + (col * 356);
+            const y = 338 + (row * 154);
+            this.createBoostIdeaCard(x, y, item, category);
+        });
+    }
+
+    createBoostIdeaCard(x, y, item, category) {
+        const bg = this.add.rectangle(x, y, 302, 118, 0x07121d, 0.84)
+            .setStrokeStyle(2, category.color, 0.72)
+            .setInteractive({ useHandCursor: true });
+        const icon = this.add.text(x - 126, y - 34, category.icon, {
+            fontSize: '13px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        const title = this.add.text(x - 102, y - 34, item.name.toUpperCase(), {
+            fontSize: '14px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            wordWrap: { width: 224 }
+        }).setOrigin(0, 0.5);
+        const body = this.add.text(x - 126, y + 18, item.text, {
+            fontSize: '11px',
+            fill: '#cfe6ff',
+            lineSpacing: 4,
+            wordWrap: { width: 252 }
+        }).setOrigin(0, 0.5);
+        const tag = this.add.text(x + 104, y + 42, 'PLANNED', {
+            fontSize: '9px',
+            fill: '#ffd86f',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        bg.on('pointerover', () => {
+            bg.setFillStyle(category.color, 0.18).setStrokeStyle(3, category.color, 1);
+            this.tweens.add({ targets: [bg, icon, title, body, tag], y: '-=4', duration: 90, ease: 'Sine.easeOut' });
+        });
+        bg.on('pointerout', () => {
+            bg.setFillStyle(0x07121d, 0.84).setStrokeStyle(2, category.color, 0.72);
+            this.tweens.add({ targets: [bg, icon, title, body, tag], y: '+=4', duration: 90, ease: 'Sine.easeOut' });
+        });
+        this.contentRoot.add([bg, icon, title, body, tag]);
+    }
+
+    makeActionButton(x, y, text, callback) {
+        return PermaUpgradeScene.prototype.makeActionButton.call(this, x, y, text, callback);
+    }
+}
+
+// ============================================
+// LEADERBOARD SCENE
+// ============================================
+class LeaderboardScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'LeaderboardScene' });
+    }
+
+    create() {
+        drawSceneBackdrop(this, 0x59418a);
+        createNeonPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 640, 560, BRANCH_VISUALS.pierce, 0.9);
+        this.add.text(GAME_CENTER_X, 112, 'LEADERBOARD', {
+            fontSize: '42px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#17111f',
+            strokeThickness: 6
+        }).setOrigin(0.5);
+        this.createLeaderboardPanel(GAME_CENTER_X, 386);
+        this.makeActionButton(220, 740, 'BACK', () => this.scene.start('MenuScene'));
+    }
+
+    createLeaderboardPanel(x, y) {
+        return MenuScene.prototype.createLeaderboardPanel.call(this, x, y);
+    }
+
+    makeSmallButton(x, y, text, callback) {
+        return MenuScene.prototype.makeSmallButton.call(this, x, y, text, callback);
+    }
+
+    refreshLeaderboard() {
+        return MenuScene.prototype.refreshLeaderboard.call(this);
+    }
+
+    makeActionButton(x, y, text, callback) {
+        return PermaUpgradeScene.prototype.makeActionButton.call(this, x, y, text, callback);
     }
 }
 
@@ -5434,7 +5677,7 @@ const config = {
     parent: 'game-root',
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scene: [BootScene, MenuScene, BuildSelectScene, IdleFactoryScene, PermaUpgradeScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
+    scene: [BootScene, MenuScene, BuildSelectScene, IdleFactoryScene, PermaUpgradeScene, BoostBayScene, LeaderboardScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
     input: {
         mouse: {
             preventDefaultWheel: false
