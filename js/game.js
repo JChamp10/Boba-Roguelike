@@ -3637,35 +3637,48 @@ class GameScene extends Phaser.Scene {
     }
 
     createHud() {
-        createNeonPanel(this, 118, 140, 220, 156, BRANCH_VISUALS.machine, 0.84).setDepth(4);
-        createNeonPanel(this, GAME_WIDTH - 98, 78, 184, 122, BRANCH_VISUALS.speed, 0.84).setDepth(4);
-        addFlavorBadge(this, 118, 70, 'NEON BOBA POS', BRANCH_VISUALS.machine, 138);
-        addFlavorBadge(this, GAME_WIDTH - 98, 18, 'ORDER BOARD', BRANCH_VISUALS.speed, 116);
-        this.bobaCountText = this.add.text(18, 80, '', { fontSize: '14px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.reloadText = this.add.text(18, 98, 'RELOADING...', { fontSize: '10px', fill: '#f6b84b', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.add.rectangle(250, 44, 310, 62, 0x07121d, 0.58)
+            .setOrigin(0.5)
+            .setStrokeStyle(2, 0xff6f9f, 0.48)
+            .setDepth(4);
+        this.add.rectangle(144, 104, 250, 62, 0x07121d, 0.50)
+            .setOrigin(0.5)
+            .setStrokeStyle(2, 0xffd86f, 0.42)
+            .setDepth(4);
+        this.add.rectangle(GAME_WIDTH - 102, 62, 176, 96, 0x07121d, 0.56)
+            .setOrigin(0.5)
+            .setStrokeStyle(2, 0x38d9ff, 0.58)
+            .setDepth(4);
+
+        this.bobaCountText = this.add.text(28, 86, '', { fontSize: '13px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.reloadText = this.add.text(144, 86, 'RELOADING...', { fontSize: '10px', fill: '#f6b84b', fontFamily: 'Arial Black' }).setOrigin(0.5);
         this.reloadText.setVisible(false);
-        this.playerStateText = this.add.text(18, 116, '', { fontSize: '12px', fill: '#ffe7b3', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.rageText = this.add.text(18, 138, '', { fontSize: '14px', fill: '#ff5f72' }).setOrigin(0, 0.5);
-        this.tcText = this.add.text(18, 158, '', { fontSize: '14px', fill: '#38d9ff' }).setOrigin(0, 0.5);
-        this.outputText = this.add.text(18, 178, '', { fontSize: '13px', fill: '#f6b84b' }).setOrigin(0, 0.5);
-        this.dashText = this.add.text(18, 198, '', { fontSize: '13px', fill: '#7cff8a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
-        this.abilityBarBg = this.add.rectangle(18, 216, 156, 8, 0x1f2b3d, 0.92).setOrigin(0, 0.5).setStrokeStyle(1, 0x7ed2ff, 0.5);
-        this.abilityBarFill = this.add.rectangle(18, 216, 156, 8, 0x7cff8a, 0.95).setOrigin(0, 0.5);
+        this.playerStateText = this.add.text(28, 108, '', { fontSize: '10px', fill: '#ffe7b3', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.rageText = this.add.text(112, 108, '', { fontSize: '10px', fill: '#ff7d9d', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.tcText = this.add.text(190, 108, '', { fontSize: '10px', fill: '#38d9ff', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.outputText = this.add.text(28, 126, '', { fontSize: '10px', fill: '#f6b84b', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.dashText = this.add.text(188, 126, '', { fontSize: '10px', fill: '#7cff8a', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.abilityBarBg = this.add.rectangle(28, 142, 196, 6, 0x1f2b3d, 0.92).setOrigin(0, 0.5).setStrokeStyle(1, 0x7ed2ff, 0.5);
+        this.abilityBarFill = this.add.rectangle(28, 142, 196, 6, 0x7cff8a, 0.95).setOrigin(0, 0.5);
 
-        this.healthBarBg = this.add.image(100, 30, 'health_bg').setOrigin(0, 0.5);
-        this.healthBarFill = this.add.image(100, 30, 'health_fill').setOrigin(0, 0.5);
-        this.healthBarFill.displayWidth = 200;
-        this.healthText = this.add.text(100, 30, '', { fontSize: '14px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.healthBarBg = this.add.image(126, 28, 'health_bg').setOrigin(0, 0.5);
+        this.healthBarFill = this.add.image(126, 28, 'health_fill').setOrigin(0, 0.5);
+        this.healthBarBg.setDisplaySize(260, 16);
+        this.healthBarFill.displayHeight = 16;
+        this.healthBarFill.displayWidth = 260;
+        this.healthText = this.add.text(132, 28, '', { fontSize: '12px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
 
-        this.xpBarBg = this.add.image(100, 55, 'xp_bg').setOrigin(0, 0.5);
-        this.xpBarFill = this.add.image(100, 55, 'xp_fill').setOrigin(0, 0.5);
+        this.xpBarBg = this.add.image(126, 55, 'xp_bg').setOrigin(0, 0.5);
+        this.xpBarFill = this.add.image(126, 55, 'xp_fill').setOrigin(0, 0.5);
+        this.xpBarBg.setDisplaySize(260, 12);
+        this.xpBarFill.displayHeight = 12;
         this.xpBarFill.displayWidth = 0;
-        this.xpText = this.add.text(100, 55, '', { fontSize: '12px', fill: '#090b12', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
+        this.xpText = this.add.text(132, 55, '', { fontSize: '10px', fill: '#090b12', fontFamily: 'Arial Black' }).setOrigin(0, 0.5);
 
-        this.waveText = this.add.text(GAME_WIDTH - 100, 34, 'WAVE 1', { fontSize: '18px', fill: '#ffe7b3', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
-        this.scoreText = this.add.text(GAME_WIDTH - 100, 59, 'SCORE: 0', { fontSize: '14px', fill: '#d5e4ff' }).setOrigin(0.5, 0.5).setDepth(5);
-        this.levelText = this.add.text(GAME_WIDTH - 100, 84, 'LVL 1', { fontSize: '14px', fill: '#38d9ff', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
-        this.factoryStatusText = this.add.text(GAME_WIDTH - 100, 109, '', { fontSize: '13px', fill: '#f6b84b', align: 'center' }).setOrigin(0.5, 0.5);
+        this.waveText = this.add.text(GAME_WIDTH - 102, 31, 'WAVE 1', { fontSize: '18px', fill: '#ffe7b3', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
+        this.scoreText = this.add.text(GAME_WIDTH - 102, 56, 'SCORE: 0', { fontSize: '12px', fill: '#d5e4ff', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
+        this.levelText = this.add.text(GAME_WIDTH - 102, 78, 'LVL 1', { fontSize: '13px', fill: '#38d9ff', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5).setDepth(5);
+        this.factoryStatusText = this.add.text(GAME_WIDTH - 102, 101, '', { fontSize: '11px', fill: '#f6b84b', align: 'center', fontFamily: 'Arial Black' }).setOrigin(0.5, 0.5);
         this.playerDownBanner = this.add.text(GAME_CENTER_X, GAME_HEIGHT - 40, 'PLAYER DOWN', {
             fontSize: '18px',
             fill: '#ffd27a',
@@ -4984,7 +4997,7 @@ class GameScene extends Phaser.Scene {
             const dashCooldown = this.dashCharges < this.maxDashCharges && this.nextDashRechargeAt > 0
                 ? ` ${Math.max(0, Math.ceil((this.nextDashRechargeAt - this.time.now) / 1000))}s`
                 : '';
-            this.dashText.setText(`SPACE DASH: ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
+            this.dashText.setText(`DASH ${this.dashCharges}/${this.maxDashCharges}${dashCooldown}`);
             abilityFillPct = this.dashCharges > 0
                 ? 1
                 : Phaser.Math.Clamp(1 - ((this.nextDashRechargeAt - this.time.now) / this.dashRechargeDelay), 0, 1);
@@ -4995,12 +5008,12 @@ class GameScene extends Phaser.Scene {
                 : this.time.now < this.nextAbilityAt
                 ? ` ${Math.max(0, Math.ceil((this.nextAbilityAt - this.time.now) / 1000))}s`
                 : ' READY';
-            this.dashText.setText(`SPACE: ${abilityCooldown}`);
+            this.dashText.setText(`SPACE${abilityCooldown}`);
             abilityFillPct = abilityActive || this.time.now >= this.nextAbilityAt
                 ? 1
                 : Phaser.Math.Clamp(1 - ((this.nextAbilityAt - this.time.now) / this.abilityCooldownMs), 0, 1);
         }
-        this.abilityBarFill.displayWidth = 156 * abilityFillPct;
+        this.abilityBarFill.displayWidth = 196 * abilityFillPct;
         this.abilityBarFill.setFillStyle(abilityFillPct >= 1 ? 0x7cff8a : 0xffd36a, 0.95);
     }
 
@@ -5447,17 +5460,17 @@ class GameScene extends Phaser.Scene {
 
     updateUI() {
         const healthPct = Math.max(0, GameState.health / GameState.maxHealth);
-        this.healthBarFill.displayWidth = 200 * healthPct;
+        this.healthBarFill.displayWidth = 260 * healthPct;
         this.healthText.setText(`${Math.ceil(GameState.health)} / ${GameState.maxHealth}`);
 
         const xpPct = GameState.xp / GameState.xpToLevel;
-        this.xpBarFill.displayWidth = 200 * xpPct;
+        this.xpBarFill.displayWidth = 260 * xpPct;
         this.xpText.setText(`XP: ${GameState.xp}/${GameState.xpToLevel}`);
 
-        this.playerStateText.setText(GameState.aimMode === 'manual' ? 'MANUAL HOLD' : 'AUTO AIM');
-        this.rageText.setText(`RAGE: ${Math.floor(GameState.rage)} (+${getRagePerKill(this)}/kill)`);
-        this.tcText.setText(`TC: ${Math.floor(GameState.tc)} (+${getTcPerKill()}/kill)`);
-        this.outputText.setText(`RUN: +${Math.floor(GameState.runTcEarned)} TC  +${Math.floor(GameState.runTapiocaEarned)} TP`);
+        this.playerStateText.setText(GameState.aimMode === 'manual' ? 'MANUAL' : 'AUTO');
+        this.rageText.setText(`RAGE ${Math.floor(GameState.rage)}`);
+        this.tcText.setText(`TC ${Math.floor(GameState.tc)}`);
+        this.outputText.setText(`RUN +${Math.floor(GameState.runTcEarned)} TC  +${Math.floor(GameState.runTapiocaEarned)} TP`);
         this.updateAbilityCooldownHud();
 
         this.waveText.setText(`WAVE ${GameState.wave}`);
