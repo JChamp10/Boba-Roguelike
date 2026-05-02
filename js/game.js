@@ -3508,6 +3508,7 @@ class GameScene extends Phaser.Scene {
         this.createBattleBackdrop();
 
         this.createPlayer();
+        this.createEquippedPet();
         this.createHud();
 
         this.enemies = this.physics.add.group();
@@ -3708,6 +3709,7 @@ class GameScene extends Phaser.Scene {
         this.updateXpPickups();
         this.updateHealingPickups();
         this.updateOrbPet();
+        this.updateEquippedPet(time);
         this.validateProjectiles();
         this.validateEnemyProjectiles();
 
@@ -4343,6 +4345,48 @@ class GameScene extends Phaser.Scene {
                 this.collectHealingPickup(this.player, target.pickup);
             }
         }
+    }
+
+    createEquippedPet() {
+        const pet = getBoostBayLoadoutOption('pets', GameState.selectedPet || 'none');
+        if (!pet || pet.id === 'none' || !pet.assetKey || !isBoostBayLoadoutUnlocked('pets', pet.id) || !this.textures.exists(pet.assetKey)) {
+            this.equippedPet = null;
+            this.equippedPetGlow = null;
+            return;
+        }
+
+        this.equippedPetOption = pet;
+        this.equippedPetGlow = this.add.circle(this.player.x - 48, this.player.y + 30, 21, BOBA_THEME.matcha, 0.18)
+            .setStrokeStyle(2, BOBA_THEME.matcha, 0.6)
+            .setDepth(3.8);
+        this.equippedPet = this.add.image(this.player.x - 48, this.player.y + 24, pet.assetKey)
+            .setScale(0.22)
+            .setDepth(4.1);
+        this.equippedPetLabel = this.add.text(this.player.x - 48, this.player.y + 55, pet.name.split(' ')[0].toUpperCase(), {
+            fontSize: '8px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#06101a',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(4.2);
+    }
+
+    updateEquippedPet(time = 0) {
+        if (!this.equippedPet?.active || !this.player?.active) return;
+        const bob = Math.sin(time / 180) * 6;
+        const targetX = this.player.x - 48;
+        const targetY = this.player.y + 26 + bob;
+        const dist = Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, targetX, targetY);
+        const step = Math.min(dist, 6.5);
+        if (dist > 0.5) {
+            const angle = Phaser.Math.Angle.Between(this.equippedPet.x, this.equippedPet.y, targetX, targetY);
+            this.equippedPet.x += Math.cos(angle) * step;
+            this.equippedPet.y += Math.sin(angle) * step;
+        }
+        this.equippedPet.setFlipX(this.equippedPet.x > this.player.x);
+        this.equippedPetGlow?.setPosition(this.equippedPet.x, this.equippedPet.y + 7);
+        this.equippedPetGlow?.setAlpha(0.16 + (Math.sin(time / 220) + 1) * 0.04);
+        this.equippedPetLabel?.setPosition(this.equippedPet.x, this.equippedPet.y + 31);
     }
 
     collectHealingPickup(player, pickup) {
