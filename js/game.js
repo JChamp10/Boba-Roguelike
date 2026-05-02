@@ -4382,15 +4382,23 @@ class GameScene extends Phaser.Scene {
             stroke: '#06101a',
             strokeThickness: 3
         }).setOrigin(0.5).setDepth(4.2);
+        this.equippedPet.nextActionAt = 0;
+        this.equippedPet.homeAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
     }
 
     updateEquippedPet(time = 0) {
         if (!this.equippedPet?.active || !this.player?.active) return;
         const bob = Math.sin(time / 180) * 6;
-        const targetX = this.player.x - 48;
-        const targetY = this.player.y + 26 + bob;
+        const targetEnemy = this.findNearestEnemy(this.equippedPet.x, this.equippedPet.y, 520);
+        let targetX = this.player.x - 48 + Math.cos((time / 900) + this.equippedPet.homeAngle) * 18;
+        let targetY = this.player.y + 26 + bob + Math.sin((time / 900) + this.equippedPet.homeAngle) * 12;
+        if (targetEnemy && this.equippedPetOption?.name !== 'Boba Magnet Crab') {
+            const orbit = Phaser.Math.Angle.Between(targetEnemy.x, targetEnemy.y, this.player.x, this.player.y);
+            targetX = targetEnemy.x + Math.cos(orbit) * 76;
+            targetY = targetEnemy.y + Math.sin(orbit) * 76 + bob;
+        }
         const dist = Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, targetX, targetY);
-        const step = Math.min(dist, 6.5);
+        const step = Math.min(dist, targetEnemy ? 9 : 6.5);
         if (dist > 0.5) {
             const angle = Phaser.Math.Angle.Between(this.equippedPet.x, this.equippedPet.y, targetX, targetY);
             this.equippedPet.x += Math.cos(angle) * step;
@@ -4400,6 +4408,186 @@ class GameScene extends Phaser.Scene {
         this.equippedPetGlow?.setPosition(this.equippedPet.x, this.equippedPet.y + 7);
         this.equippedPetGlow?.setAlpha(0.16 + (Math.sin(time / 220) + 1) * 0.04);
         this.equippedPetLabel?.setPosition(this.equippedPet.x, this.equippedPet.y + 31);
+        this.updateEquippedPetAction(time);
+    }
+
+    updateEquippedPetAction(time = 0) {
+        if (!this.equippedPet?.active || time < (this.equippedPet.nextActionAt || 0)) return;
+        const petName = this.equippedPetOption?.name || '';
+        if (petName === 'Boba Magnet Crab') {
+            this.performMagnetCrabAction();
+            this.equippedPet.nextActionAt = time + 260;
+            return;
+        }
+
+        const enemy = this.findNearestEnemy(this.equippedPet.x, this.equippedPet.y, petName === 'Lychee Drone' ? 720 : 460);
+        if (!enemy) {
+            this.equippedPet.nextActionAt = time + 450;
+            return;
+        }
+
+        if (petName === 'Tapioca Slime') {
+            this.performTapiocaSlimeAction(enemy);
+            this.equippedPet.nextActionAt = time + 3600;
+        } else if (petName === 'Lychee Drone') {
+            this.performLycheeDroneAction(enemy);
+            this.equippedPet.nextActionAt = time + 1450;
+        } else if (petName === 'Matcha Spirit') {
+            this.performMatchaSpiritAction(enemy);
+            this.equippedPet.nextActionAt = time + 3100;
+        } else if (petName === 'Tiger Cub') {
+            this.performTigerCubAction(enemy);
+            this.equippedPet.nextActionAt = time + 2200;
+        } else if (petName === 'Sugar Ghost') {
+            this.performSugarGhostAction(enemy);
+            this.equippedPet.nextActionAt = time + 3000;
+        }
+    }
+
+    pulseEquippedPet(color = 0xffffff) {
+        if (!this.equippedPet?.active) return;
+        this.equippedPet.setTint(color);
+        this.tweens.add({
+            targets: this.equippedPet,
+            scale: 0.29,
+            duration: 90,
+            yoyo: true,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                if (this.equippedPet?.active) {
+                    this.equippedPet.clearTint();
+                    this.equippedPet.setScale(0.22);
+                }
+            }
+        });
+    }
+
+    showPetActionText(text, color = '#fff4d6') {
+        if (!this.equippedPet?.active) return;
+        const label = this.add.text(this.equippedPet.x, this.equippedPet.y - 34, text, {
+            fontSize: '11px',
+            fill: color,
+            fontFamily: 'Arial Black',
+            stroke: '#06101a',
+            strokeThickness: 4
+        }).setOrigin(0.5).setDepth(8);
+        this.tweens.add({
+            targets: label,
+            y: label.y - 28,
+            alpha: 0,
+            duration: 520,
+            ease: 'Sine.easeOut',
+            onComplete: () => label.destroy()
+        });
+    }
+
+    performTapiocaSlimeAction(enemy) {
+        this.pulseEquippedPet(0x7cff8a);
+        this.showPetActionText('SPLAT', '#7cff8a');
+        const blast = this.add.circle(enemy.x, enemy.y, 24, 0x7cff8a, 0.18)
+            .setStrokeStyle(4, 0x7cff8a, 0.76)
+            .setDepth(3);
+        this.tweens.add({
+            targets: blast,
+            radius: 92,
+            alpha: 0,
+            duration: 360,
+            ease: 'Sine.easeOut',
+            onComplete: () => blast.destroy()
+        });
+        this.enemies.children.entries.forEach(target => {
+            if (!target.active) return;
+            if (Phaser.Math.Distance.Between(enemy.x, enemy.y, target.x, target.y) > 92) return;
+            target.body.velocity.scale(0.35);
+            target.setTint(0x7cff8a);
+            this.time.delayedCall(420, () => { if (target.active) target.clearTint(); });
+            this.damageEnemyFromAbility(target, 50, '#7cff8a');
+        });
+    }
+
+    performLycheeDroneAction(enemy) {
+        this.pulseEquippedPet(0xff7dcb);
+        this.showPetActionText('PEW', '#ff9ddd');
+        const angle = Phaser.Math.Angle.Between(this.equippedPet.x, this.equippedPet.y, enemy.x, enemy.y);
+        const shot = this.createPlayerBoba(this.equippedPet.x, this.equippedPet.y, angle, 10, 0, 'pet', this.shotVolleyId++);
+        if (!shot) return;
+        shot.setTexture(this.projectileTextureKey || 'projectile_boba');
+        shot.setScale(0.12);
+        shot.setTint(0xff9ddd);
+        shot.body.velocity.set(Math.cos(angle) * 520, Math.sin(angle) * 520);
+        shot.pierceRemaining = 0;
+        shot.weaponType = 'petDrone';
+    }
+
+    performMatchaSpiritAction(enemy) {
+        this.pulseEquippedPet(0x83f28f);
+        this.showPetActionText('BEAM', '#83f28f');
+        const beam = this.add.rectangle(
+            (this.equippedPet.x + enemy.x) / 2,
+            (this.equippedPet.y + enemy.y) / 2,
+            Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, enemy.x, enemy.y),
+            8,
+            0x83f28f,
+            0.48
+        ).setOrigin(0, 0.5).setDepth(3.9);
+        beam.setPosition(this.equippedPet.x, this.equippedPet.y);
+        beam.setRotation(Phaser.Math.Angle.Between(this.equippedPet.x, this.equippedPet.y, enemy.x, enemy.y));
+        this.tweens.add({ targets: beam, alpha: 0, duration: 260, onComplete: () => beam.destroy() });
+        this.damageEnemyFromAbility(enemy, 20, '#83f28f');
+        this.applyMatchaPoison(enemy, 20);
+    }
+
+    performTigerCubAction(enemy) {
+        this.pulseEquippedPet(0xffb14f);
+        this.showPetActionText('MARK', '#ffcf7a');
+        this.tweens.add({
+            targets: this.equippedPet,
+            x: enemy.x - 34,
+            y: enemy.y + 16,
+            duration: 120,
+            yoyo: true,
+            ease: 'Quad.easeOut'
+        });
+        enemy.petMarkedUntil = this.time.now + 2600;
+        enemy.setTint(0xffd36a);
+        this.time.delayedCall(2600, () => { if (enemy.active) enemy.clearTint(); });
+        this.damageEnemyFromAbility(enemy, 16, '#ffcf7a');
+    }
+
+    performSugarGhostAction(enemy) {
+        this.pulseEquippedPet(0xc99af7);
+        this.showPetActionText('ECHO', '#d8b8ff');
+        const angle = Phaser.Math.Angle.Between(this.equippedPet.x, this.equippedPet.y, enemy.x, enemy.y);
+        [-0.16, 0.16].forEach(offset => {
+            const shot = this.createPlayerBoba(this.equippedPet.x, this.equippedPet.y, angle + offset, this.playerDamage * 0.55, 0, 'pet', this.shotVolleyId++);
+            if (!shot) return;
+            shot.setScale(Math.max(0.1, this.projectileScale * 0.72));
+            shot.setTint(0xd8b8ff);
+            shot.body.velocity.set(Math.cos(angle + offset) * 460, Math.sin(angle + offset) * 460);
+            shot.pierceRemaining = 0;
+            shot.weaponType = 'petGhost';
+        });
+    }
+
+    performMagnetCrabAction() {
+        const pickups = [
+            ...(this.xpPickups?.children.entries || []).map(pickup => ({ pickup, type: 'xp' })),
+            ...(this.healingPickups?.children.entries || []).map(pickup => ({ pickup, type: 'heal' }))
+        ].filter(entry => entry.pickup.active);
+        const target = pickups
+            .sort((a, b) => Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, a.pickup.x, a.pickup.y)
+                - Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, b.pickup.x, b.pickup.y))[0];
+        if (!target || Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, target.pickup.x, target.pickup.y) > 420) return;
+        this.physics.moveToObject(target.pickup, this.equippedPet, 360);
+        if (Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, target.pickup.x, target.pickup.y) < 26) {
+            this.pulseEquippedPet(0x7ed2ff);
+            this.showPetActionText('FETCH', '#7ed2ff');
+            if (target.type === 'xp') {
+                this.collectXpPickup(this.player, target.pickup);
+            } else {
+                this.collectHealingPickup(this.player, target.pickup);
+            }
+        }
     }
 
     collectHealingPickup(player, pickup) {
@@ -5095,6 +5283,12 @@ class GameScene extends Phaser.Scene {
         if (boba.weaponType === 'matchaOrb') {
             this.applyMatchaPoison(enemy, boba.baseDamage || damage);
             this.healFromMatchaDamage(damage);
+        }
+        if (this.time.now < (enemy.petMarkedUntil || 0)) {
+            damage *= 1.5;
+            enemy.petMarkedUntil = 0;
+            enemy.clearTint();
+            this.showDamageNumber(enemy.x, enemy.y - 18, 'MARK!', '#ffcf7a');
         }
         this.showDamageNumber(enemy.x, enemy.y, damage);
 
