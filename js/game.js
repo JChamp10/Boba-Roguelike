@@ -114,7 +114,7 @@ const GUN_OPTIONS = [
     {
         id: 'matcha-orb',
         name: 'Matcha Orb Launcher',
-        desc: 'Infinite-pierce poison orbs linger and lifesteal',
+        desc: 'Single-pierce poison orbs linger and lifesteal',
         gunTexture: 'matcha_gun',
         projectileTexture: 'matcha_projectile',
         gunScale: 0.105,
@@ -123,12 +123,12 @@ const GUN_OPTIONS = [
         projectileLifespan: 4300,
         projectileCount: 1,
         spread: 0.15,
-        pierce: Infinity,
+        pierce: 1,
         damageMultiplier: 0.55,
-        fireRateMultiplier: 2.1,
+        fireRateMultiplier: 1.05,
         reloadDurationMultiplier: 5,
         weaponType: 'matchaOrb',
-        synergy: 'Infinite pierce poison steals life; SPACE doubles orb duration.',
+        synergy: 'One-pierce poison steals life; SPACE doubles orb duration.',
         accent: 0x83f28f
     },
     {
@@ -509,7 +509,7 @@ const IDLE_FACTORY_TECH = [
 // ============================================
 const PERMA_UPGRADES = [
     { id: 'menuSpeed', branch: 'Small Boosts', name: 'Speed', desc: '+1% run speed per level', icon: 'SPD', baseCost: 1000, costScale: 1.10, maxLevel: 999, effectText: '+1% speed', apply: scene => { scene.playerSpeed += scene.basePlayerSpeed * 0.01; } },
-    { id: 'menuDamage', branch: 'Small Boosts', name: 'Damage', desc: '+10% run damage per level', icon: 'DMG', baseCost: 2500, costScale: 1.25, maxLevel: 999, effectText: '+10% damage', apply: scene => { scene.playerDamage += scene.basePlayerDamage * 0.10; } },
+    { id: 'menuDamage', branch: 'Small Boosts', name: 'Damage', desc: '+1% run damage per level', icon: 'DMG', baseCost: 2500, costScale: 1.25, maxLevel: 999, effectText: '+1% damage', apply: scene => { scene.playerDamage += scene.basePlayerDamage * 0.01; } },
     { id: 'menuReload', branch: 'Small Boosts', name: 'Reload Speed', desc: '+1% reload speed per level', icon: 'RLD', baseCost: 1000, costScale: 1.10, maxLevel: 999, effectText: '+1% reload speed', apply: scene => { scene.permaReloadSpeedBonus += 0.01; } },
     { id: 'menuHealth', branch: 'Small Boosts', name: 'Health', desc: '+1 max HP per level', icon: 'HP', baseCost: 5000, costScale: 1.30, maxLevel: 999, effectText: '+1 max HP', apply: () => { GameState.maxHealth += 1; } },
     { id: 'menuAmmo', branch: 'Small Boosts', name: 'Ammo Capacity', desc: '+1 max boba ammo per level', icon: 'AMMO', baseCost: 100000, costScale: 1.25, maxLevel: 999, effectText: '+1 max ammo', apply: scene => { scene.permaMaxAmmoBonus += 1; } },
@@ -618,7 +618,7 @@ const BRANCH_VISUALS = {
 
 const PERMA_STORE_VISUALS = {
     menuSpeed: { theme: 'speed', tag: 'BOOST', icon: 'SPD', assetKey: 'perma_speed_1', main: '+1%', sub: 'Speed per level' },
-    menuDamage: { theme: 'damage', tag: 'BOOST', icon: 'DMG', assetKey: 'perma_damage_1', main: '+10%', sub: 'Damage per level' },
+    menuDamage: { theme: 'damage', tag: 'BOOST', icon: 'DMG', assetKey: 'perma_damage_1', main: '+1%', sub: 'Damage per level' },
     menuReload: { theme: 'speed', tag: 'BOOST', icon: 'RLD', assetKey: 'perma_reload_1', main: '+1%', sub: 'Reload per level' },
     menuHealth: { theme: 'health', tag: 'BOOST', icon: 'HP', assetKey: 'perma_health_1', main: '+1', sub: 'Max HP per level' },
     menuAmmo: { theme: 'machine', tag: 'BOOST', icon: 'AMMO', main: '+1', sub: 'Ammo per level' },
@@ -2677,9 +2677,10 @@ class PermaUpgradeScene extends Phaser.Scene {
         super({ key: 'PermaUpgradeScene' });
     }
 
-    create() {
+    create(data = {}) {
         SaveManager.load();
         drawSceneBackdrop(this, 0x476b86);
+        this.activeUpgradeTab = data.tab === 'boosts' ? 'boosts' : 'upgrades';
 
         this.add.text(GAME_CENTER_X, 48, 'MAIN MENU UPGRADES', {
             fontSize: '34px',
@@ -2694,19 +2695,11 @@ class PermaUpgradeScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         this.shopCards = [];
-        [
-            { branch: 'Small Boosts', y: 245 },
-            { branch: 'Per-Run Boosts', y: 520 }
-        ].forEach(row => {
-            const rowUpgrades = PERMA_UPGRADES.filter(upgrade => upgrade.branch === row.branch);
-            const compact = rowUpgrades.length >= 5;
-            const spacing = compact ? 188 : 220;
-            const startX = GAME_CENTER_X - ((rowUpgrades.length - 1) * spacing / 2);
-            rowUpgrades.forEach((upgrade, index) => {
-                this.shopCards.push(this.createMainMenuUpgradeCard(startX + (index * spacing), row.y, upgrade, compact));
-            });
-        });
-        this.createFutureBoostBay(1036, 504);
+        if (this.activeUpgradeTab === 'boosts') {
+            this.createFutureBoostBay(GAME_CENTER_X, 386, true);
+        } else {
+            this.createUpgradeCardRows();
+        }
 
         this.detailText = this.add.text(GAME_CENTER_X, 690, '', {
             fontSize: '14px',
@@ -2720,35 +2713,98 @@ class PermaUpgradeScene extends Phaser.Scene {
             GameState.reset();
             this.scene.start('GameScene');
         });
+        this.createUpgradeTabs();
 
         this.updateUpgradeShop();
     }
 
-    createFutureBoostBay(x, y) {
+    createUpgradeTabs() {
+        [
+            { id: 'upgrades', label: 'UPGRADES', x: GAME_CENTER_X - 112, color: 0x7ed2ff },
+            { id: 'boosts', label: 'BOOST BAY', x: GAME_CENTER_X + 112, color: 0xf0b14b }
+        ].forEach(tab => {
+            const selected = this.activeUpgradeTab === tab.id;
+            const btn = this.add.rectangle(tab.x, 128, 198, 38, selected ? tab.color : 0x07121d, selected ? 0.30 : 0.78)
+                .setStrokeStyle(selected ? 3 : 2, tab.color, selected ? 1 : 0.78)
+                .setInteractive({ useHandCursor: !selected });
+            this.add.text(tab.x, 128, tab.label, {
+                fontSize: '13px',
+                fill: '#fff4d6',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5);
+            btn.on('pointerover', () => {
+                if (!selected) btn.setFillStyle(tab.color, 0.20);
+            });
+            btn.on('pointerout', () => {
+                if (!selected) btn.setFillStyle(0x07121d, 0.78);
+            });
+            btn.on('pointerdown', () => {
+                if (!selected && !this.boostBayWheelSpinning) this.scene.restart({ tab: tab.id });
+            });
+        });
+    }
+
+    createUpgradeCardRows() {
+        [
+            { branch: 'Small Boosts', y: 270 },
+            { branch: 'Per-Run Boosts', y: 528 }
+        ].forEach(row => {
+            const rowUpgrades = PERMA_UPGRADES.filter(upgrade => upgrade.branch === row.branch);
+            const compact = rowUpgrades.length >= 5;
+            const spacing = compact ? 188 : 220;
+            const startX = GAME_CENTER_X - ((rowUpgrades.length - 1) * spacing / 2);
+            rowUpgrades.forEach((upgrade, index) => {
+                this.shopCards.push(this.createMainMenuUpgradeCard(startX + (index * spacing), row.y, upgrade, compact));
+            });
+        });
+    }
+
+    createFutureBoostBay(x, y, large = false) {
         this.boostBayCategory = this.boostBayCategory || BOOST_BAY_DATA[0].id;
         this.boostBayWheelSpinning = false;
-        createNeonPanel(this, x, y, 270, 338, BRANCH_VISUALS.special, 0.82);
-        this.add.text(x, y - 146, 'BOOST BAY', {
-            fontSize: '18px',
+        const layout = large
+            ? {
+                panelW: 780, panelH: 540, titleOffset: -236, titleSize: '34px',
+                promptOffset: -198, promptSize: '13px', tabStart: -160, tabStep: 160,
+                tabW: 136, tabH: 42, tabOffset: -154, tabFont: '14px',
+                subtitleOffset: -108, subtitleFont: '15px', subtitleWidth: 600,
+                wheelOffset: 58, radius: 178, markerRadius: 118, markerScale: 0.42,
+                markerFont: '26px', hubRadius: 32, pointerOffset: -144,
+                inventoryOffset: 232, inventoryFont: '13px', inventoryWidth: 620,
+                spinOffset: 270, spinW: 240, spinH: 44, spinFont: '16px'
+            }
+            : {
+                panelW: 270, panelH: 338, titleOffset: -146, titleSize: '18px',
+                promptOffset: -122, promptSize: '10px', tabStart: -84, tabStep: 84,
+                tabW: 74, tabH: 30, tabOffset: -88, tabFont: '9px',
+                subtitleOffset: -54, subtitleFont: '10px', subtitleWidth: 210,
+                wheelOffset: 32, radius: 84, markerRadius: 56, markerScale: 0.20,
+                markerFont: '14px', hubRadius: 19, pointerOffset: -66,
+                inventoryOffset: 132, inventoryFont: '8px', inventoryWidth: 218,
+                spinOffset: 160, spinW: 172, spinH: 28, spinFont: '10px'
+            };
+        createNeonPanel(this, x, y, layout.panelW, layout.panelH, BRANCH_VISUALS.special, 0.82);
+        this.add.text(x, y + layout.titleOffset, 'BOOST BAY', {
+            fontSize: layout.titleSize,
             fill: '#fff4d6',
             fontFamily: 'Arial Black',
             stroke: '#143c44',
-            strokeThickness: 3
+            strokeThickness: large ? 6 : 3
         }).setOrigin(0.5);
-        this.add.text(x, y - 122, 'PICK A FUTURE BOOST FAMILY', {
-            fontSize: '10px',
+        this.add.text(x, y + layout.promptOffset, 'PICK A FUTURE BOOST FAMILY', {
+            fontSize: layout.promptSize,
             fill: '#7ee0ff',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
 
         this.boostBayTabs = [];
         BOOST_BAY_DATA.forEach((slot, index) => {
-            const tabX = x - 84 + (index * 84);
-            const tab = this.add.rectangle(tabX, y - 88, 74, 30, 0x07121d, 0.78)
+            const tabX = x + layout.tabStart + (index * layout.tabStep);
+            const tab = this.add.rectangle(tabX, y + layout.tabOffset, layout.tabW, layout.tabH, 0x07121d, 0.78)
                 .setStrokeStyle(2, slot.color, 0.84)
                 .setInteractive({ useHandCursor: true });
-            const label = this.add.text(tabX, y - 88, slot.title, {
-                fontSize: '9px',
+            const label = this.add.text(tabX, y + layout.tabOffset, slot.title, {
+                fontSize: layout.tabFont,
                 fill: '#fff4d6',
                 fontFamily: 'Arial Black'
             }).setOrigin(0.5);
@@ -2757,12 +2813,12 @@ class PermaUpgradeScene extends Phaser.Scene {
             tab.on('pointerdown', () => {
                 if (this.boostBayWheelSpinning) return;
                 this.boostBayCategory = slot.id;
-                this.renderBoostBayPreview(x, y);
+                this.renderBoostBayPreview(x, y, layout);
             });
             this.boostBayTabs.push({ tab, label, slot });
         });
         this.boostBayPreviewRoot = this.add.container(0, 0);
-        this.renderBoostBayPreview(x, y);
+        this.renderBoostBayPreview(x, y, layout);
     }
 
     refreshBoostBayTabs() {
@@ -2773,22 +2829,22 @@ class PermaUpgradeScene extends Phaser.Scene {
         });
     }
 
-    renderBoostBayPreview(x, y) {
+    renderBoostBayPreview(x, y, layout) {
         this.boostBayPreviewRoot?.removeAll(true);
         this.refreshBoostBayTabs();
         const category = BOOST_BAY_DATA.find(slot => slot.id === this.boostBayCategory) || BOOST_BAY_DATA[0];
         const nodes = [];
-        nodes.push(this.add.text(x, y - 54, category.subtitle.toUpperCase(), {
-            fontSize: '10px',
+        nodes.push(this.add.text(x, y + layout.subtitleOffset, category.subtitle.toUpperCase(), {
+            fontSize: layout.subtitleFont,
             fill: '#ffd86f',
             align: 'center',
             fontFamily: 'Arial Black',
-            wordWrap: { width: 210 }
+            wordWrap: { width: layout.subtitleWidth }
         }).setOrigin(0.5));
 
-        const wheel = this.add.container(x, y + 32);
+        const wheel = this.add.container(x, y + layout.wheelOffset);
         const wheelGraphics = this.add.graphics();
-        const radius = 84;
+        const radius = layout.radius;
         const sliceAngle = (Math.PI * 2) / category.items.length;
         category.items.forEach((item, index) => {
             const start = -Math.PI / 2 + (index * sliceAngle);
@@ -2802,14 +2858,14 @@ class PermaUpgradeScene extends Phaser.Scene {
             wheelGraphics.fillTriangle(0, 0, x1, y1, x2, y2);
             wheelGraphics.lineStyle(1, 0xfff4d6, 0.36);
             wheelGraphics.strokeTriangle(0, 0, x1, y1, x2, y2);
-            const markerX = Math.cos(mid) * 56;
-            const markerY = Math.sin(mid) * 56;
+            const markerX = Math.cos(mid) * layout.markerRadius;
+            const markerY = Math.sin(mid) * layout.markerRadius;
             if (item.assetKey && this.textures.exists(item.assetKey)) {
-                const sprite = this.add.image(markerX, markerY, item.assetKey).setScale(0.20);
+                const sprite = this.add.image(markerX, markerY, item.assetKey).setScale(layout.markerScale);
                 wheel.add(sprite);
             } else {
                 const label = this.add.text(markerX, markerY, `${index + 1}`, {
-                    fontSize: '14px',
+                    fontSize: layout.markerFont,
                     fill: '#fff4d6',
                     fontFamily: 'Arial Black',
                     stroke: '#06101a',
@@ -2819,24 +2875,24 @@ class PermaUpgradeScene extends Phaser.Scene {
             }
         });
         wheel.addAt(wheelGraphics, 0);
-        const hub = this.add.circle(0, 0, 19, 0x07121d, 0.92).setStrokeStyle(2, category.color, 0.95);
+        const hub = this.add.circle(0, 0, layout.hubRadius, 0x07121d, 0.92).setStrokeStyle(2, category.color, 0.95);
         wheel.add(hub);
-        const pointer = this.add.triangle(x, y - 66, 0, 0, -12, -21, 12, -21, 0xfff4d6, 0.96)
+        const pointer = this.add.triangle(x, y + layout.pointerOffset, 0, 0, -16, -28, 16, -28, 0xfff4d6, 0.96)
             .setStrokeStyle(2, category.color, 0.9);
         nodes.push(wheel, pointer);
 
-        const inventoryText = this.add.text(x, y + 132, this.getBoostBayInventoryLine(category), {
-            fontSize: '8px',
+        const inventoryText = this.add.text(x, y + layout.inventoryOffset, this.getBoostBayInventoryLine(category), {
+            fontSize: layout.inventoryFont,
             fill: '#cfe6ff',
             align: 'center',
-            wordWrap: { width: 218 }
+            wordWrap: { width: layout.inventoryWidth }
         }).setOrigin(0.5);
         const canSpin = GameState.tapioca >= BOOST_BAY_SPIN_COST && !this.boostBayWheelSpinning;
-        const spinButton = this.add.rectangle(x, y + 160, 172, 28, canSpin ? category.color : 0x17212e, canSpin ? 0.28 : 0.78)
+        const spinButton = this.add.rectangle(x, y + layout.spinOffset, layout.spinW, layout.spinH, canSpin ? category.color : 0x17212e, canSpin ? 0.28 : 0.78)
             .setStrokeStyle(2, canSpin ? category.color : 0x48566c, canSpin ? 0.95 : 0.7)
             .setInteractive({ useHandCursor: canSpin });
-        const spinText = this.add.text(x, y + 160, `SPIN ${formatTapiocaCost(BOOST_BAY_SPIN_COST)}`, {
-            fontSize: '10px',
+        const spinText = this.add.text(x, y + layout.spinOffset, `SPIN ${formatTapiocaCost(BOOST_BAY_SPIN_COST)}`, {
+            fontSize: layout.spinFont,
             fill: canSpin ? '#fff4d6' : '#8ea0b8',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
@@ -2848,7 +2904,7 @@ class PermaUpgradeScene extends Phaser.Scene {
             if (!canSpin) return;
             spinButton.setFillStyle(category.color, 0.28);
         });
-        spinButton.on('pointerdown', () => this.spinBoostBayWheel(category, wheel, x, y));
+        spinButton.on('pointerdown', () => this.spinBoostBayWheel(category, wheel, x, y, layout));
         nodes.push(inventoryText, spinButton, spinText);
         this.boostBayPreviewRoot.add(nodes);
     }
@@ -2864,7 +2920,7 @@ class PermaUpgradeScene extends Phaser.Scene {
         return owned.length > 0 ? owned.slice(0, 2).join('  |  ') : 'No wins yet. Spin to draft one.';
     }
 
-    spinBoostBayWheel(category, wheel, x, y) {
+    spinBoostBayWheel(category, wheel, x, y, layout) {
         if (this.boostBayWheelSpinning || GameState.tapioca < BOOST_BAY_SPIN_COST) return;
         this.boostBayWheelSpinning = true;
         GameState.tapioca -= BOOST_BAY_SPIN_COST;
@@ -2882,10 +2938,32 @@ class PermaUpgradeScene extends Phaser.Scene {
                 GameState.boostBayInventory[category.id] = GameState.boostBayInventory[category.id] || {};
                 GameState.boostBayInventory[category.id][result.name] = this.getBoostBayOwnedCount(category.id, result.name) + 1;
                 SaveManager.save();
-                this.boostBayWheelSpinning = false;
-                this.updateUpgradeShop();
-                this.detailText.setText(`${category.title} landed on ${result.name}! Owned ${this.getBoostBayOwnedCount(category.id, result.name)}.`);
-                this.renderBoostBayPreview(x, y);
+                const ownedCount = this.getBoostBayOwnedCount(category.id, result.name);
+                const resultBannerY = y + layout.wheelOffset;
+                const resultGlow = this.add.rectangle(x, resultBannerY, 360, 78, category.color, 0.18)
+                    .setStrokeStyle(3, category.color, 0.96);
+                const resultText = this.add.text(x, resultBannerY - 12, 'YOU WON', {
+                    fontSize: '16px',
+                    fill: '#ffd86f',
+                    fontFamily: 'Arial Black',
+                    stroke: '#06101a',
+                    strokeThickness: 4
+                }).setOrigin(0.5);
+                const prizeText = this.add.text(x, resultBannerY + 15, `${result.name.toUpperCase()}  x${ownedCount}`, {
+                    fontSize: '18px',
+                    fill: '#fff4d6',
+                    fontFamily: 'Arial Black',
+                    stroke: '#06101a',
+                    strokeThickness: 4
+                }).setOrigin(0.5);
+                this.boostBayPreviewRoot.add([resultGlow, resultText, prizeText]);
+                this.detailText.setText(`${category.title} landed on ${result.name}! Owned ${ownedCount}.`);
+                this.time.delayedCall(1500, () => {
+                    this.boostBayWheelSpinning = false;
+                    this.updateUpgradeShop();
+                    this.detailText.setText(`${category.title} landed on ${result.name}! Owned ${ownedCount}.`);
+                    this.renderBoostBayPreview(x, y, layout);
+                });
             }
         });
     }
@@ -2932,7 +3010,10 @@ class PermaUpgradeScene extends Phaser.Scene {
     }
 
     updateUpgradeShop() {
-        this.summaryText.setText(`TAPIOCA ${Math.floor(GameState.tapioca)}   |   Hover a card to see price   |   Click to buy one level`);
+        const hint = this.activeUpgradeTab === 'boosts'
+            ? 'Choose a boost family, then spin for unlocks used on the Build loadout screen'
+            : 'Hover a card to see price   |   Click to buy one level';
+        this.summaryText.setText(`TAPIOCA ${Math.floor(GameState.tapioca)}   |   ${hint}`);
         this.shopCards.forEach(node => {
             const level = getPermaUpgradeLevel(node.upgrade.id);
             const canBuy = canBuyPermaUpgrade(node.upgrade);
@@ -4688,6 +4769,9 @@ class GameScene extends Phaser.Scene {
         boba.volleyId = volleyId;
         boba.damage = damage;
         boba.pierceRemaining = this.projectilePierce;
+        if (boba.weaponType === 'matchaOrb') {
+            boba.pierceRemaining = 1;
+        }
         boba.pierceHits = 0;
         boba.hitEnemyIds = new Set();
         boba.spawnX = spawnX;
