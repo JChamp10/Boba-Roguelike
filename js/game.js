@@ -258,6 +258,43 @@ function getSelectedBuildProfile() {
     };
 }
 
+function getBoostBayLoadoutOptions(categoryId) {
+    const category = BOOST_BAY_DATA.find(item => item.id === categoryId);
+    return [
+        { id: 'none', name: `No ${category?.title?.slice(0, -1) || 'Boost'}`, text: 'Leave this slot empty.', icon: 'NO', color: BOBA_THEME.muted },
+        ...(category?.items || []).map((item, index) => ({
+            id: item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+            name: item.name,
+            text: item.text,
+            icon: item.icon || `${category.icon}${index + 1}`,
+            assetKey: item.assetKey,
+            color: category.color
+        }))
+    ];
+}
+
+function getBoostBayLoadoutOption(categoryId, id) {
+    const options = getBoostBayLoadoutOptions(categoryId);
+    return options.find(option => option.id === id) || options[0];
+}
+
+function isBoostBayLoadoutUnlocked(categoryId, id) {
+    if (id === 'none') return true;
+    const option = getBoostBayLoadoutOption(categoryId, id);
+    return !!GameState.boostBayInventory?.[categoryId]?.[option.name];
+}
+
+function getLoadoutStateKey(categoryId) {
+    return ({ pets: 'selectedPet', charms: 'selectedCharm', auras: 'selectedAura' })[categoryId] || 'selectedPet';
+}
+
+function sanitizeBoostBayLoadoutState() {
+    ['pets', 'charms', 'auras'].forEach(categoryId => {
+        const key = getLoadoutStateKey(categoryId);
+        GameState[key] = getBoostBayLoadoutOption(categoryId, GameState[key]).id;
+    });
+}
+
 function doesBuildHaveSynergy(drink = getDrinkOption(), gun = getGunOption()) {
     if (!drink?.id || !gun?.id) return false;
     if (drink.id === 'classic' && gun.id === 'classic') return true;
@@ -286,6 +323,9 @@ const SaveManager = {
             aimMode: GameState.aimMode,
             selectedDrink: GameState.selectedDrink,
             selectedGun: GameState.selectedGun,
+            selectedPet: GameState.selectedPet,
+            selectedCharm: GameState.selectedCharm,
+            selectedAura: GameState.selectedAura,
             unlockedDrinks: GameState.unlockedDrinks,
             unlockedGuns: GameState.unlockedGuns,
             idleMachines: GameState.idleMachines,
@@ -316,9 +356,13 @@ const SaveManager = {
             GameState.aimMode = data.aimMode === 'manual' ? 'manual' : 'auto';
             GameState.selectedDrink = data.selectedDrink || GameState.selectedDrink || 'classic';
             GameState.selectedGun = data.selectedGun || GameState.selectedGun || 'classic';
+            GameState.selectedPet = data.selectedPet || GameState.selectedPet || 'none';
+            GameState.selectedCharm = data.selectedCharm || GameState.selectedCharm || 'none';
+            GameState.selectedAura = data.selectedAura || GameState.selectedAura || 'none';
             GameState.unlockedDrinks = this.sanitizeBuildUnlocks(data.unlockedDrinks, DRINK_OPTIONS);
             GameState.unlockedGuns = this.sanitizeBuildUnlocks(data.unlockedGuns, GUN_OPTIONS);
             sanitizeBuildState();
+            sanitizeBoostBayLoadoutState();
             GameState.idleMachines = data.idleMachines || {};
             GameState.idleFactoryTech = data.idleFactoryTech || {};
             GameState.evolutionBoost = data.evolutionBoost || 0;
@@ -342,9 +386,13 @@ const SaveManager = {
         GameState.aimMode = data.aimMode === 'manual' ? 'manual' : 'auto';
         GameState.selectedDrink = data.selectedDrink || GameState.selectedDrink || 'classic';
         GameState.selectedGun = data.selectedGun || GameState.selectedGun || 'classic';
+        GameState.selectedPet = data.selectedPet || GameState.selectedPet || 'none';
+        GameState.selectedCharm = data.selectedCharm || GameState.selectedCharm || 'none';
+        GameState.selectedAura = data.selectedAura || GameState.selectedAura || 'none';
         GameState.unlockedDrinks = this.sanitizeBuildUnlocks(data.unlockedDrinks, DRINK_OPTIONS);
         GameState.unlockedGuns = this.sanitizeBuildUnlocks(data.unlockedGuns, GUN_OPTIONS);
         sanitizeBuildState();
+        sanitizeBoostBayLoadoutState();
         GameState.idleMachines = data.idleMachines || {};
         GameState.idleFactoryTech = data.idleFactoryTech || {};
         GameState.evolutionBoost = data.evolutionBoost || 0;
@@ -367,6 +415,9 @@ const SaveManager = {
         GameState.aimMode = 'auto';
         GameState.selectedDrink = 'classic';
         GameState.selectedGun = 'classic';
+        GameState.selectedPet = 'none';
+        GameState.selectedCharm = 'none';
+        GameState.selectedAura = 'none';
         GameState.unlockedDrinks = { classic: true };
         GameState.unlockedGuns = { classic: true };
         GameState.idleMachines = {};
@@ -584,12 +635,12 @@ const BOOST_BAY_DATA = [
         color: BOBA_THEME.matcha,
         subtitle: 'Companions that act on their own',
         items: [
-            { name: 'Tapioca Slime', text: 'Follows enemies, explodes for 50 damage, leaves sticky slowing puddles, then respawns.' },
-            { name: 'Lychee Drone', text: 'Floats above you and fires 10 damage tracking shots at low-health enemies.' },
-            { name: 'Matcha Spirit', text: 'Charges for 3 seconds, then releases a 20 damage beam synced with your attacks.' },
-            { name: 'Tiger Cub', text: 'Dashes between enemies and marks targets so they take 1.5x follow-up damage.' },
-            { name: 'Sugar Ghost', text: 'Phases through enemies and duplicates your attacks every 3 seconds.' },
-            { name: 'Boba Magnet Crab', text: 'Collects drops around the arena and brings them back to you.' }
+            { name: 'Tapioca Slime', text: 'Follows enemies, explodes for 50 damage, leaves sticky slowing puddles, then respawns.', assetKey: 'boost_pet_0' },
+            { name: 'Lychee Drone', text: 'Floats above you and fires 10 damage tracking shots at low-health enemies.', assetKey: 'boost_pet_1' },
+            { name: 'Matcha Spirit', text: 'Charges for 3 seconds, then releases a 20 damage beam synced with your attacks.', assetKey: 'boost_pet_2' },
+            { name: 'Tiger Cub', text: 'Dashes between enemies and marks targets so they take 1.5x follow-up damage.', assetKey: 'boost_pet_3' },
+            { name: 'Sugar Ghost', text: 'Phases through enemies and duplicates your attacks every 3 seconds.', assetKey: 'boost_pet_4' },
+            { name: 'Boba Magnet Crab', text: 'Collects drops around the arena and brings them back to you.', assetKey: 'boost_pet_5' }
         ]
     },
     {
@@ -599,12 +650,12 @@ const BOOST_BAY_DATA = [
         color: BOBA_THEME.caramel,
         subtitle: 'Rule-breaking modifiers',
         items: [
-            { name: 'Fracture Charm', text: 'Projectiles split once into two 75% damage shards.' },
-            { name: 'Reversal Charm', text: 'Some attacks automatically fire backwards.' },
-            { name: 'Boomerang Charm', text: '1 in 7 expired shots boomerang back, hit enemies, and refund 1 ammo.' },
-            { name: 'Phase Charm', text: 'Attacks have a 50% chance to ignore an enemy and keep piercing.' },
-            { name: 'Delay Charm', text: 'Hits explode after a short delay for 10% of shot damage in an area.' },
-            { name: 'Combo Charm', text: 'Consecutive hits scale effect strength from 1.0x up to 2.0x.' }
+            { name: 'Fracture Charm', text: 'Projectiles split once into two 75% damage shards.', assetKey: 'boost_charm_0' },
+            { name: 'Reversal Charm', text: 'Some attacks automatically fire backwards.', assetKey: 'boost_charm_1' },
+            { name: 'Boomerang Charm', text: '1 in 7 expired shots boomerang back, hit enemies, and refund 1 ammo.', assetKey: 'boost_charm_2' },
+            { name: 'Phase Charm', text: 'Attacks have a 50% chance to ignore an enemy and keep piercing.', assetKey: 'boost_charm_3' },
+            { name: 'Delay Charm', text: 'Hits explode after a short delay for 10% of shot damage in an area.', assetKey: 'boost_charm_4' },
+            { name: 'Combo Charm', text: 'Consecutive hits scale effect strength from 1.0x up to 2.0x.', assetKey: 'boost_charm_5' }
         ]
     },
     {
@@ -614,12 +665,12 @@ const BOOST_BAY_DATA = [
         color: BOBA_THEME.lychee,
         subtitle: 'Constant area effects around the player',
         items: [
-            { name: 'Gravity Aura', text: 'Slowly pulls enemies toward you.' },
-            { name: 'Pulse Aura', text: 'Emits shockwaves every few seconds that knock back and deal 10 damage.' },
-            { name: 'Freeze Aura', text: 'Nearby enemies slow and can freeze over time.' },
-            { name: 'Burn Aura', text: 'Deals 1 damage per second to enemies in range.' },
-            { name: 'Mirror Aura', text: 'Occasionally spawns phantom attacks at one-third damage.' },
-            { name: 'Chaos Aura', text: 'Each shot has a 1 in 5 chance to trigger a random effect like freeze, burn, slow, split, or lifesteal.' }
+            { name: 'Gravity Aura', text: 'Slowly pulls enemies toward you.', assetKey: 'boost_aura_0' },
+            { name: 'Pulse Aura', text: 'Emits shockwaves every few seconds that knock back and deal 10 damage.', assetKey: 'boost_aura_1' },
+            { name: 'Freeze Aura', text: 'Nearby enemies slow and can freeze over time.', assetKey: 'boost_aura_2' },
+            { name: 'Burn Aura', text: 'Deals 1 damage per second to enemies in range.', assetKey: 'boost_aura_3' },
+            { name: 'Mirror Aura', text: 'Occasionally spawns phantom attacks at one-third damage.', assetKey: 'boost_aura_4' },
+            { name: 'Chaos Aura', text: 'Each shot has a 1 in 5 chance to trigger a random effect like freeze, burn, slow, split, or lifesteal.', assetKey: 'boost_aura_5' }
         ]
     }
 ];
@@ -1237,7 +1288,25 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'perma_reload_1', path: 'assets/Perma and Temp Upgrades/Reload Speed 1% permanant.png' },
     { key: 'perma_speed_1', path: 'assets/Perma and Temp Upgrades/Speed 1% Permanant.png' },
     { key: 'temp_rage_2', path: 'assets/Perma and Temp Upgrades/Rage.png' },
-    { key: 'temp_xp_5', path: 'assets/Perma and Temp Upgrades/XP.png' }
+    { key: 'temp_xp_5', path: 'assets/Perma and Temp Upgrades/XP.png' },
+    { key: 'boost_pet_0', path: 'assets/Pet/tile000.png' },
+    { key: 'boost_pet_1', path: 'assets/Pet/tile001.png' },
+    { key: 'boost_pet_2', path: 'assets/Pet/tile002.png' },
+    { key: 'boost_pet_3', path: 'assets/Pet/tile004.png' },
+    { key: 'boost_pet_4', path: 'assets/Pet/tile005.png' },
+    { key: 'boost_pet_5', path: 'assets/Pet/tile006.png' },
+    { key: 'boost_charm_0', path: 'assets/Charms/tile000.png' },
+    { key: 'boost_charm_1', path: 'assets/Charms/tile001.png' },
+    { key: 'boost_charm_2', path: 'assets/Charms/tile002.png' },
+    { key: 'boost_charm_3', path: 'assets/Charms/tile004.png' },
+    { key: 'boost_charm_4', path: 'assets/Charms/tile005.png' },
+    { key: 'boost_charm_5', path: 'assets/Charms/tile006.png' },
+    { key: 'boost_aura_0', path: 'assets/Aura/tile000.png' },
+    { key: 'boost_aura_1', path: 'assets/Aura/tile001.png' },
+    { key: 'boost_aura_2', path: 'assets/Aura/tile002.png' },
+    { key: 'boost_aura_3', path: 'assets/Aura/tile004.png' },
+    { key: 'boost_aura_4', path: 'assets/Aura/tile005.png' },
+    { key: 'boost_aura_5', path: 'assets/Aura/tile006.png' }
 ];
 
 // ============================================
@@ -2207,23 +2276,33 @@ class BuildSelectScene extends Phaser.Scene {
         this.drinkWheel = this.makeBuildWheel(600, 336, 'CHARACTER', DRINK_OPTIONS, 'drink');
         this.gunWheel = this.makeBuildWheel(600, 552, 'WEAPON', GUN_OPTIONS, 'gun');
 
-        this.synergyTitleText = this.add.text(998, 206, 'SYNERGY', {
+        this.boostTitleText = this.add.text(998, 206, 'BOOST LOADOUT', {
             fontSize: '18px',
             fill: '#d9c8ff',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
-        this.runHintText = this.add.text(998, 354, '', {
+        this.boostLoadoutSlots = {};
+        this.createBoostLoadoutMenu(998, 264, 'PET', 'pets');
+        this.createBoostLoadoutMenu(998, 366, 'CHARM', 'charms');
+        this.createBoostLoadoutMenu(998, 468, 'AURA', 'auras');
+
+        this.synergyTitleText = this.add.text(998, 552, 'BUILD INFO', {
             fontSize: '14px',
+            fill: '#d9c8ff',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        this.runHintText = this.add.text(998, 582, '', {
+            fontSize: '10px',
             fill: '#d8e8ff',
             align: 'center',
-            lineSpacing: 7,
+            lineSpacing: 3,
             wordWrap: { width: 210 }
         }).setOrigin(0.5);
-        this.abilityText = this.add.text(998, 520, '', {
-            fontSize: '13px',
+        this.abilityText = this.add.text(998, 628, '', {
+            fontSize: '10px',
             fill: '#ffd86f',
             align: 'center',
-            lineSpacing: 7,
+            lineSpacing: 3,
             wordWrap: { width: 210 }
         }).setOrigin(0.5);
 
@@ -2254,6 +2333,63 @@ class BuildSelectScene extends Phaser.Scene {
         return MenuScene.prototype.buySelectedBuildOption.call(this, type);
     }
 
+    createBoostLoadoutMenu(x, y, label, categoryId) {
+        const category = BOOST_BAY_DATA.find(item => item.id === categoryId) || BOOST_BAY_DATA[0];
+        this.add.rectangle(x, y, 218, 88, 0x07121d, 0.46).setStrokeStyle(2, category.color, 0.42);
+        this.add.text(x - 94, y - 28, label, {
+            fontSize: '10px',
+            fill: '#ffd86f',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0, 0.5);
+        const iconFrame = this.add.circle(x - 66, y + 6, 34, category.color, 0.10).setStrokeStyle(2, category.color, 0.82);
+        const iconImage = this.add.image(x - 66, y + 6, 'boost_pet_0').setScale(0.28).setVisible(false);
+        const iconText = this.add.text(x - 66, y + 6, '', {
+            fontSize: '18px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#06101a',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+        const nameText = this.add.text(x - 22, y - 8, '', {
+            fontSize: '10px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            wordWrap: { width: 132 }
+        }).setOrigin(0, 0.5);
+        const descText = this.add.text(x - 22, y + 18, '', {
+            fontSize: '8px',
+            fill: '#cfe6ff',
+            wordWrap: { width: 132 }
+        }).setOrigin(0, 0.5);
+        const prev = this.add.text(x - 104, y + 6, '<', {
+            fontSize: '22px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        const next = this.add.text(x + 104, y + 6, '>', {
+            fontSize: '22px',
+            fill: '#fff7e6',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        [prev, next].forEach(arrow => {
+            arrow.on('pointerover', () => arrow.setScale(1.14).setColor('#ffd86f'));
+            arrow.on('pointerout', () => arrow.setScale(1).setColor('#fff7e6'));
+        });
+        prev.on('pointerdown', () => this.rotateBoostLoadout(categoryId, -1));
+        next.on('pointerdown', () => this.rotateBoostLoadout(categoryId, 1));
+        this.boostLoadoutSlots[categoryId] = { categoryId, iconFrame, iconImage, iconText, nameText, descText };
+    }
+
+    rotateBoostLoadout(categoryId, direction) {
+        const options = getBoostBayLoadoutOptions(categoryId);
+        const stateKey = getLoadoutStateKey(categoryId);
+        const currentIndex = Math.max(0, options.findIndex(option => option.id === GameState[stateKey]));
+        GameState[stateKey] = options[Phaser.Math.Wrap(currentIndex + direction, 0, options.length)].id;
+        sanitizeBoostBayLoadoutState();
+        SaveManager.save();
+        this.updateDisplays();
+    }
+
     showBuildLockedMessage(locked) {
         if (!this.abilityText || !locked) return;
         const message = locked.unlocked
@@ -2274,6 +2410,7 @@ class BuildSelectScene extends Phaser.Scene {
 
         this.updateWheelPreview(this.drinkWheel);
         this.updateWheelPreview(this.gunWheel);
+        this.updateBoostLoadoutMenus();
         this.buildNameText.setText(`${drink.name.toUpperCase()} + ${gun.name.toUpperCase()}`);
         const locked = getSelectedBuildLock();
         const synergy = getBuildSynergyText(drink, gun);
@@ -2296,6 +2433,20 @@ class BuildSelectScene extends Phaser.Scene {
             .setOrigin(0.5)
             .setScale(gun.gunScale * 2.25)
             .setFlipX(!!gun.gunFacesRight);
+    }
+
+    updateBoostLoadoutMenus() {
+        Object.values(this.boostLoadoutSlots || {}).forEach(slot => {
+            const stateKey = getLoadoutStateKey(slot.categoryId);
+            const option = getBoostBayLoadoutOption(slot.categoryId, GameState[stateKey]);
+            const unlocked = isBoostBayLoadoutUnlocked(slot.categoryId, option.id);
+            const hasImage = !!option.assetKey && this.textures.exists(option.assetKey);
+            slot.iconFrame.setAlpha(unlocked ? 1 : 0.42);
+            slot.iconImage.setVisible(hasImage).setTexture(hasImage ? option.assetKey : slot.iconImage.texture.key).setAlpha(unlocked ? 1 : 0.32);
+            slot.iconText.setVisible(!hasImage).setText(option.icon).setColor(unlocked ? '#fff4d6' : '#7f8aa1');
+            slot.nameText.setText(unlocked ? option.name.toUpperCase() : `${option.name.toUpperCase()} LOCKED`);
+            slot.descText.setText(unlocked ? option.text : 'Unlock from this Boost Bay wheel.');
+        });
     }
 }
 
@@ -2555,7 +2706,7 @@ class PermaUpgradeScene extends Phaser.Scene {
                 this.shopCards.push(this.createMainMenuUpgradeCard(startX + (index * spacing), row.y, upgrade, compact));
             });
         });
-        this.createFutureBoostBay(1036, 520);
+        this.createFutureBoostBay(1036, 504);
 
         this.detailText = this.add.text(GAME_CENTER_X, 690, '', {
             fontSize: '14px',
@@ -2576,15 +2727,15 @@ class PermaUpgradeScene extends Phaser.Scene {
     createFutureBoostBay(x, y) {
         this.boostBayCategory = this.boostBayCategory || BOOST_BAY_DATA[0].id;
         this.boostBayWheelSpinning = false;
-        createNeonPanel(this, x, y, 250, 286, BRANCH_VISUALS.special, 0.82);
-        this.add.text(x, y - 120, 'BOOST BAY', {
+        createNeonPanel(this, x, y, 270, 338, BRANCH_VISUALS.special, 0.82);
+        this.add.text(x, y - 146, 'BOOST BAY', {
             fontSize: '18px',
             fill: '#fff4d6',
             fontFamily: 'Arial Black',
             stroke: '#143c44',
             strokeThickness: 3
         }).setOrigin(0.5);
-        this.add.text(x, y - 96, 'PICK A FUTURE BOOST FAMILY', {
+        this.add.text(x, y - 122, 'PICK A FUTURE BOOST FAMILY', {
             fontSize: '10px',
             fill: '#7ee0ff',
             fontFamily: 'Arial Black'
@@ -2592,11 +2743,11 @@ class PermaUpgradeScene extends Phaser.Scene {
 
         this.boostBayTabs = [];
         BOOST_BAY_DATA.forEach((slot, index) => {
-            const tabX = x - 78 + (index * 78);
-            const tab = this.add.rectangle(tabX, y - 62, 68, 28, 0x07121d, 0.78)
+            const tabX = x - 84 + (index * 84);
+            const tab = this.add.rectangle(tabX, y - 88, 74, 30, 0x07121d, 0.78)
                 .setStrokeStyle(2, slot.color, 0.84)
                 .setInteractive({ useHandCursor: true });
-            const label = this.add.text(tabX, y - 62, slot.title, {
+            const label = this.add.text(tabX, y - 88, slot.title, {
                 fontSize: '9px',
                 fill: '#fff4d6',
                 fontFamily: 'Arial Black'
@@ -2627,7 +2778,7 @@ class PermaUpgradeScene extends Phaser.Scene {
         this.refreshBoostBayTabs();
         const category = BOOST_BAY_DATA.find(slot => slot.id === this.boostBayCategory) || BOOST_BAY_DATA[0];
         const nodes = [];
-        nodes.push(this.add.text(x, y - 28, category.subtitle.toUpperCase(), {
+        nodes.push(this.add.text(x, y - 54, category.subtitle.toUpperCase(), {
             fontSize: '10px',
             fill: '#ffd86f',
             align: 'center',
@@ -2635,9 +2786,9 @@ class PermaUpgradeScene extends Phaser.Scene {
             wordWrap: { width: 210 }
         }).setOrigin(0.5));
 
-        const wheel = this.add.container(x, y + 36);
+        const wheel = this.add.container(x, y + 32);
         const wheelGraphics = this.add.graphics();
-        const radius = 58;
+        const radius = 84;
         const sliceAngle = (Math.PI * 2) / category.items.length;
         category.items.forEach((item, index) => {
             const start = -Math.PI / 2 + (index * sliceAngle);
@@ -2651,36 +2802,40 @@ class PermaUpgradeScene extends Phaser.Scene {
             wheelGraphics.fillTriangle(0, 0, x1, y1, x2, y2);
             wheelGraphics.lineStyle(1, 0xfff4d6, 0.36);
             wheelGraphics.strokeTriangle(0, 0, x1, y1, x2, y2);
-            const count = this.getBoostBayOwnedCount(category.id, item.name);
-            const label = this.add.text(Math.cos(mid) * 38, Math.sin(mid) * 38, `${index + 1}`, {
-                fontSize: '12px',
-                fill: '#fff4d6',
-                fontFamily: 'Arial Black',
-                stroke: '#06101a',
-                strokeThickness: 3
-            }).setOrigin(0.5);
-            label.itemName = item.name;
-            label.count = count;
-            wheel.add(label);
+            const markerX = Math.cos(mid) * 56;
+            const markerY = Math.sin(mid) * 56;
+            if (item.assetKey && this.textures.exists(item.assetKey)) {
+                const sprite = this.add.image(markerX, markerY, item.assetKey).setScale(0.20);
+                wheel.add(sprite);
+            } else {
+                const label = this.add.text(markerX, markerY, `${index + 1}`, {
+                    fontSize: '14px',
+                    fill: '#fff4d6',
+                    fontFamily: 'Arial Black',
+                    stroke: '#06101a',
+                    strokeThickness: 3
+                }).setOrigin(0.5);
+                wheel.add(label);
+            }
         });
         wheel.addAt(wheelGraphics, 0);
-        const hub = this.add.circle(0, 0, 15, 0x07121d, 0.92).setStrokeStyle(2, category.color, 0.95);
+        const hub = this.add.circle(0, 0, 19, 0x07121d, 0.92).setStrokeStyle(2, category.color, 0.95);
         wheel.add(hub);
-        const pointer = this.add.triangle(x, y - 38, 0, 0, -10, -18, 10, -18, 0xfff4d6, 0.96)
+        const pointer = this.add.triangle(x, y - 66, 0, 0, -12, -21, 12, -21, 0xfff4d6, 0.96)
             .setStrokeStyle(2, category.color, 0.9);
         nodes.push(wheel, pointer);
 
-        const inventoryText = this.add.text(x, y + 104, this.getBoostBayInventoryLine(category), {
+        const inventoryText = this.add.text(x, y + 132, this.getBoostBayInventoryLine(category), {
             fontSize: '8px',
             fill: '#cfe6ff',
             align: 'center',
             wordWrap: { width: 218 }
         }).setOrigin(0.5);
         const canSpin = GameState.tapioca >= BOOST_BAY_SPIN_COST && !this.boostBayWheelSpinning;
-        const spinButton = this.add.rectangle(x, y + 132, 154, 26, canSpin ? category.color : 0x17212e, canSpin ? 0.28 : 0.78)
+        const spinButton = this.add.rectangle(x, y + 160, 172, 28, canSpin ? category.color : 0x17212e, canSpin ? 0.28 : 0.78)
             .setStrokeStyle(2, canSpin ? category.color : 0x48566c, canSpin ? 0.95 : 0.7)
             .setInteractive({ useHandCursor: canSpin });
-        const spinText = this.add.text(x, y + 132, `SPIN ${formatTapiocaCost(BOOST_BAY_SPIN_COST)}`, {
+        const spinText = this.add.text(x, y + 160, `SPIN ${formatTapiocaCost(BOOST_BAY_SPIN_COST)}`, {
             fontSize: '10px',
             fill: canSpin ? '#fff4d6' : '#8ea0b8',
             fontFamily: 'Arial Black'
