@@ -4390,15 +4390,21 @@ class GameScene extends Phaser.Scene {
         if (!this.equippedPet?.active || !this.player?.active) return;
         const bob = Math.sin(time / 180) * 6;
         const targetEnemy = this.findNearestEnemy(this.equippedPet.x, this.equippedPet.y, 520);
+        const targetPickup = this.equippedPetOption?.name === 'Boba Magnet Crab'
+            ? this.findNearestPetPickup(720)
+            : null;
         let targetX = this.player.x - 48 + Math.cos((time / 900) + this.equippedPet.homeAngle) * 18;
         let targetY = this.player.y + 26 + bob + Math.sin((time / 900) + this.equippedPet.homeAngle) * 12;
-        if (targetEnemy && this.equippedPetOption?.name !== 'Boba Magnet Crab') {
+        if (targetPickup) {
+            targetX = targetPickup.pickup.x;
+            targetY = targetPickup.pickup.y + bob;
+        } else if (targetEnemy && this.equippedPetOption?.name !== 'Boba Magnet Crab') {
             const orbit = Phaser.Math.Angle.Between(targetEnemy.x, targetEnemy.y, this.player.x, this.player.y);
             targetX = targetEnemy.x + Math.cos(orbit) * 76;
             targetY = targetEnemy.y + Math.sin(orbit) * 76 + bob;
         }
         const dist = Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, targetX, targetY);
-        const step = Math.min(dist, targetEnemy ? 9 : 6.5);
+        const step = Math.min(dist, targetPickup ? 13 : targetEnemy ? 9 : 6.5);
         if (dist > 0.5) {
             const angle = Phaser.Math.Angle.Between(this.equippedPet.x, this.equippedPet.y, targetX, targetY);
             this.equippedPet.x += Math.cos(angle) * step;
@@ -4570,15 +4576,8 @@ class GameScene extends Phaser.Scene {
     }
 
     performMagnetCrabAction() {
-        const pickups = [
-            ...(this.xpPickups?.children.entries || []).map(pickup => ({ pickup, type: 'xp' })),
-            ...(this.healingPickups?.children.entries || []).map(pickup => ({ pickup, type: 'heal' }))
-        ].filter(entry => entry.pickup.active);
-        const target = pickups
-            .sort((a, b) => Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, a.pickup.x, a.pickup.y)
-                - Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, b.pickup.x, b.pickup.y))[0];
-        if (!target || Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, target.pickup.x, target.pickup.y) > 420) return;
-        this.physics.moveToObject(target.pickup, this.equippedPet, 360);
+        const target = this.findNearestPetPickup(720);
+        if (!target) return;
         if (Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, target.pickup.x, target.pickup.y) < 26) {
             this.pulseEquippedPet(0x7ed2ff);
             this.showPetActionText('FETCH', '#7ed2ff');
@@ -4588,6 +4587,24 @@ class GameScene extends Phaser.Scene {
                 this.collectHealingPickup(this.player, target.pickup);
             }
         }
+    }
+
+    findNearestPetPickup(maxDistance = Infinity) {
+        if (!this.equippedPet?.active) return null;
+        const pickups = [
+            ...(this.xpPickups?.children.entries || []).map(pickup => ({ pickup, type: 'xp' })),
+            ...(this.healingPickups?.children.entries || []).map(pickup => ({ pickup, type: 'heal' }))
+        ].filter(entry => entry.pickup.active);
+        let target = null;
+        let nearestDist = Infinity;
+        pickups.forEach(entry => {
+            const dist = Phaser.Math.Distance.Between(this.equippedPet.x, this.equippedPet.y, entry.pickup.x, entry.pickup.y);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                target = entry;
+            }
+        });
+        return nearestDist <= maxDistance ? target : null;
     }
 
     collectHealingPickup(player, pickup) {
@@ -4657,7 +4674,7 @@ class GameScene extends Phaser.Scene {
         if (this.weaponType === 'tigerBlade') {
             const facingLeft = aimPoint.x < pivot.x;
             this.gunSprite.setOrigin(0.78, 0.5);
-            this.gunSprite.setFlipX(true);
+            this.gunSprite.setFlipX(false);
             this.gunSprite.setFlipY(facingLeft);
             this.gunSprite.setRotation(aimAngle);
             this.player.setRotation(0);
