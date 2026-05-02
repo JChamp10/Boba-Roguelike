@@ -63,6 +63,8 @@ function cleanupMultiplayerRooms() {
 function publicRoom(room) {
     return {
         code: room.code,
+        hostId: room.hostId,
+        seed: room.seed,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
         players: Object.values(room.players).map(player => ({
@@ -319,6 +321,8 @@ app.post('/multiplayer/rooms', (req, res) => {
     const now = Date.now();
     const room = {
         code,
+        hostId: playerId,
+        seed: crypto.randomInt(1, 1000000000),
         createdAt: now,
         updatedAt: now,
         players: {
@@ -380,9 +384,21 @@ app.post('/multiplayer/rooms/:code/state', (req, res) => {
     }
     const rawState = req.body.state || {};
     const now = Date.now();
+    const enemySnapshots = Array.isArray(rawState.enemies)
+        ? rawState.enemies.slice(0, 90).map(enemy => ({
+            id: Math.max(0, Math.floor(Number(enemy.id) || 0)),
+            x: Math.max(-200, Math.min(2600, Number(enemy.x) || 0)),
+            y: Math.max(-200, Math.min(1900, Number(enemy.y) || 0)),
+            hp: Math.max(0, Math.floor(Number(enemy.hp) || 0)),
+            maxHp: Math.max(1, Math.floor(Number(enemy.maxHp) || 1)),
+            type: enemy.type === 'thrower' ? 'thrower' : 'melee'
+        })).filter(enemy => enemy.id > 0)
+        : undefined;
     player.state = {
-        x: Math.max(0, Math.min(1280, Number(rawState.x) || 0)),
-        y: Math.max(0, Math.min(720, Number(rawState.y) || 0)),
+        x: Math.max(0, Math.min(2600, Number(rawState.x) || 0)),
+        y: Math.max(0, Math.min(1900, Number(rawState.y) || 0)),
+        aimX: Math.max(-200, Math.min(2800, Number(rawState.aimX) || 0)),
+        aimY: Math.max(-200, Math.min(2100, Number(rawState.aimY) || 0)),
         health: Math.max(0, Math.floor(Number(rawState.health) || 0)),
         maxHealth: Math.max(1, Math.floor(Number(rawState.maxHealth) || 100)),
         wave: Math.max(1, Math.floor(Number(rawState.wave) || 1)),
@@ -390,6 +406,7 @@ app.post('/multiplayer/rooms/:code/state', (req, res) => {
         level: Math.max(1, Math.floor(Number(rawState.level) || 1)),
         down: !!rawState.down,
         build: String(rawState.build || '').slice(0, 48),
+        enemies: enemySnapshots,
         updatedAt: now
     };
     player.updatedAt = now;

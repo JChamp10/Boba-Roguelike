@@ -4,6 +4,10 @@ const GAME_WIDTH = 1200;
 const GAME_HEIGHT = 800;
 const GAME_CENTER_X = GAME_WIDTH / 2;
 const GAME_CENTER_Y = GAME_HEIGHT / 2;
+const BATTLE_WORLD_WIDTH = 2200;
+const BATTLE_WORLD_HEIGHT = 1500;
+const BATTLE_WORLD_CENTER_X = BATTLE_WORLD_WIDTH / 2;
+const BATTLE_WORLD_CENTER_Y = BATTLE_WORLD_HEIGHT / 2;
 // GAMEPLAY TUNING: change these first when balancing pickups, passive income, and store boosts.
 const HEALING_ORB_HEAL_AMOUNT = 5;
 const XP_ORB_MAGNET_RANGE = 210;
@@ -2388,6 +2392,8 @@ class MultiplayerScene extends Phaser.Scene {
         startFreshRunWithMultiplayer(this, {
             code: this.room.code,
             playerId: this.playerId,
+            hostId: this.room.hostId,
+            seed: this.room.seed,
             username: window.BobaAuth?.getUsername?.() || 'Player'
         });
     }
@@ -3666,6 +3672,19 @@ class GameScene extends Phaser.Scene {
         this.shieldActive = false;
         this.shieldCooldown = 15000;
         this.freezeChance = 0;
+        this.worldWidth = BATTLE_WORLD_WIDTH;
+        this.worldHeight = BATTLE_WORLD_HEIGHT;
+        this.selectedCharmOption = this.getValidatedBoostBayOption('charms', GameState.selectedCharm || 'none');
+        this.selectedAuraOption = this.getValidatedBoostBayOption('auras', GameState.selectedAura || 'none');
+        this.comboCharmHits = 0;
+        this.comboCharmResetAt = 0;
+        this.nextAuraPulseAt = 0;
+        this.nextAuraBurnAt = 0;
+        this.nextAuraMirrorAt = 0;
+        this.nextAuraChaosAt = 0;
+        this.multiplayerEnemySnapshots = new Map();
+        this.multiplayerRespawnAt = 0;
+        this.multiplayerRespawnTimer = null;
 
         PERMA_UPGRADES.forEach(upgrade => {
             const level = getPermaUpgradeLevel(upgrade.id);
@@ -3682,13 +3701,14 @@ class GameScene extends Phaser.Scene {
         GameState.health = GameState.maxHealth;
         GameState.tc = 0;
 
-        this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
         this.createBattleBackdrop();
 
         this.createPlayer();
+        this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
+        this.cameras.main.startFollow(this.player, false, 1, 1);
         this.createEquippedPet();
         this.createHud();
-        this.setupMultiplayerRun();
 
         this.enemies = this.physics.add.group();
         this.bobas = this.physics.add.group();
@@ -3698,6 +3718,7 @@ class GameScene extends Phaser.Scene {
         this.physics.add.overlap(this.player, this.xpPickups, this.collectXpPickup, null, this);
         this.physics.add.overlap(this.player, this.healingPickups, this.collectHealingPickup, null, this);
         this.physics.add.overlap(this.player, this.enemyProjectiles, this.hitPlayerWithEnemyProjectile, null, this);
+        this.setupMultiplayerRun();
 
         this.cursors = this.input.keyboard.addKeys({
             up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -3765,30 +3786,59 @@ class GameScene extends Phaser.Scene {
         this.updateUI();
     }
 
+    getValidatedBoostBayOption(categoryId, selectedId) {
+        const option = getBoostBayLoadoutOption(categoryId, selectedId || 'none');
+        return isBoostBayLoadoutUnlocked(categoryId, option.id)
+            ? option
+            : getBoostBayLoadoutOption(categoryId, 'none');
+    }
+
+    hasCharm(name) {
+        return this.selectedCharmOption?.name === name;
+    }
+
+    hasAura(name) {
+        return this.selectedAuraOption?.name === name;
+    }
+
     createBattleBackdrop() {
-        this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x07111f);
+        const centerX = this.worldWidth / 2;
+        const centerY = this.worldHeight / 2;
+        this.add.rectangle(centerX, centerY, this.worldWidth, this.worldHeight, 0x07111f);
         if (this.textures.exists('battle_background')) {
-            const bg = this.add.image(GAME_CENTER_X, GAME_CENTER_Y, 'battle_background').setDepth(0);
+            const bg = this.add.image(centerX, centerY, 'battle_background').setDepth(0);
             const source = this.textures.get('battle_background').getSourceImage();
-            const scale = Math.max(GAME_WIDTH / source.width, GAME_HEIGHT / source.height);
+            const scale = Math.max(this.worldWidth / source.width, this.worldHeight / source.height);
             bg.setScale(scale);
         } else {
-            this.add.circle(160, 90, 230, BOBA_THEME.aqua, 0.055);
-            this.add.circle(1040, 720, 300, BOBA_THEME.lychee, 0.045);
+            this.add.circle(260, 140, 300, BOBA_THEME.aqua, 0.055);
+            this.add.circle(this.worldWidth - 260, this.worldHeight - 180, 360, BOBA_THEME.lychee, 0.045);
 
             const grid = this.add.graphics();
             grid.lineStyle(1, BOBA_THEME.aqua, 0.16);
-            for (let x = 0; x < GAME_WIDTH; x += 40) {
-                grid.lineBetween(x, 0, x, GAME_HEIGHT);
+            for (let x = 0; x < this.worldWidth; x += 40) {
+                grid.lineBetween(x, 0, x, this.worldHeight);
             }
-            for (let y = 0; y < GAME_HEIGHT; y += 40) {
-                grid.lineBetween(0, y, GAME_WIDTH, y);
+            for (let y = 0; y < this.worldHeight; y += 40) {
+                grid.lineBetween(0, y, this.worldWidth, y);
             }
         }
+        const gateGraphics = this.add.graphics().setDepth(0.4);
+        [
+            { x: centerX, y: 32, color: BOBA_THEME.lychee },
+            { x: centerX, y: this.worldHeight - 32, color: BOBA_THEME.aqua }
+        ].forEach(gate => {
+            gateGraphics.fillStyle(0x07121d, 0.72);
+            gateGraphics.fillRoundedRect(gate.x - 150, gate.y - 28, 300, 56, 8);
+            gateGraphics.lineStyle(5, gate.color, 0.8);
+            gateGraphics.strokeRoundedRect(gate.x - 150, gate.y - 28, 300, 56, 8);
+            gateGraphics.lineStyle(2, 0xfff4c2, 0.5);
+            gateGraphics.lineBetween(gate.x - 112, gate.y, gate.x + 112, gate.y);
+        });
     }
 
     createPlayer() {
-        this.player = this.physics.add.sprite(GAME_CENTER_X, GAME_HEIGHT - 180, this.playerTextureKey || 'player_boba');
+        this.player = this.physics.add.sprite(BATTLE_WORLD_CENTER_X, BATTLE_WORLD_CENTER_Y + 260, this.playerTextureKey || 'player_boba');
         const playerOrigin = this.weaponProfile?.playerOrigin || { x: 0.5, y: 0.5 };
         this.player.setOrigin(playerOrigin.x, playerOrigin.y);
         this.player.setScale(this.weaponProfile?.playerScale || 0.14);
@@ -3818,15 +3868,15 @@ class GameScene extends Phaser.Scene {
     }
 
     createHud() {
-        this.add.rectangle(250, 44, 310, 62, 0x07121d, 0.58)
+        const hudPanel = this.add.rectangle(250, 44, 310, 62, 0x07121d, 0.58)
             .setOrigin(0.5)
             .setStrokeStyle(2, 0xff6f9f, 0.48)
             .setDepth(4);
-        this.add.rectangle(144, 104, 250, 62, 0x07121d, 0.50)
+        const statPanel = this.add.rectangle(144, 104, 250, 62, 0x07121d, 0.50)
             .setOrigin(0.5)
             .setStrokeStyle(2, 0xffd86f, 0.42)
             .setDepth(4);
-        this.add.rectangle(GAME_WIDTH - 102, 62, 176, 96, 0x07121d, 0.56)
+        const wavePanel = this.add.rectangle(GAME_WIDTH - 102, 62, 176, 96, 0x07121d, 0.56)
             .setOrigin(0.5)
             .setStrokeStyle(2, 0x38d9ff, 0.58)
             .setDepth(4);
@@ -3867,11 +3917,15 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(6).setVisible(false);
 
         [
+            hudPanel, statPanel, wavePanel,
             this.bobaCountText, this.reloadText, this.playerStateText, this.rageText, this.tcText,
             this.outputText, this.dashText, this.abilityBarBg, this.abilityBarFill, this.healthBarBg, this.healthBarFill, this.healthText,
             this.xpBarBg, this.xpBarFill, this.xpText, this.waveText, this.scoreText,
-            this.levelText, this.factoryStatusText
-        ].forEach(node => node?.setDepth?.(5));
+            this.levelText, this.factoryStatusText, this.playerDownBanner
+        ].forEach(node => {
+            node?.setDepth?.(node === this.playerDownBanner ? 6 : 5);
+            node?.setScrollFactor?.(0);
+        });
 
         this.updateBobaDisplay();
     }
@@ -3881,6 +3935,7 @@ class GameScene extends Phaser.Scene {
         this.remotePlayer = null;
         this.remotePlayerName = null;
         this.remotePlayerStatus = null;
+        this.remoteAimLine = null;
         this.lastMultiplayerStateAt = 0;
         if (!this.multiplayerSession?.code || !this.multiplayerSession?.playerId) return;
 
@@ -3904,7 +3959,8 @@ class GameScene extends Phaser.Scene {
             fontFamily: 'Arial Black',
             stroke: '#06101a',
             strokeThickness: 4
-        }).setOrigin(0.5).setDepth(6);
+        }).setOrigin(0.5).setDepth(6).setScrollFactor(0);
+        this.remoteAimLine = this.add.graphics().setDepth(3.1).setVisible(false);
 
         this.multiplayerPollTimer = this.time.addEvent({
             delay: 850,
@@ -3917,6 +3973,10 @@ class GameScene extends Phaser.Scene {
 
     updateMultiplayerRun(time = 0) {
         if (!this.multiplayerSession?.code || !this.player?.active) return;
+        if (this.playerDown && this.multiplayerRespawnAt > 0 && this.playerDownBanner) {
+            const secondsLeft = Math.max(0, Math.ceil((this.multiplayerRespawnAt - time) / 1000));
+            this.playerDownBanner.setText(`RESPAWNING IN ${secondsLeft}`);
+        }
         if (time >= (this.lastMultiplayerStateAt || 0) + 180) {
             this.lastMultiplayerStateAt = time;
             this.sendMultiplayerState();
@@ -3925,16 +3985,20 @@ class GameScene extends Phaser.Scene {
 
     sendMultiplayerState() {
         if (!this.multiplayerSession?.code || !this.player?.active || !window.BobaAuth?.sendMultiplayerState) return;
+        const aimPoint = this.getVisualAimPoint();
         const state = {
             x: this.player.x,
             y: this.player.y,
+            aimX: aimPoint?.x || this.player.x,
+            aimY: aimPoint?.y || (this.player.y - 100),
             health: GameState.health,
             maxHealth: GameState.maxHealth,
             wave: GameState.wave,
             score: GameState.score,
             level: GameState.level,
             down: this.playerDown || this.runEnded,
-            build: `${getDrinkOption().name} + ${getGunOption().name}`
+            build: `${getDrinkOption().name} + ${getGunOption().name}`,
+            enemies: this.isMultiplayerHost() ? this.getMultiplayerEnemySnapshots() : undefined
         };
         window.BobaAuth.sendMultiplayerState(this.multiplayerSession.code, this.multiplayerSession.playerId, state)
             .then(data => this.applyMultiplayerRoom(data.room))
@@ -3954,12 +4018,23 @@ class GameScene extends Phaser.Scene {
 
     applyMultiplayerRoom(room) {
         if (!room || !this.multiplayerSession?.playerId) return;
+        this.multiplayerSession.hostId = room.hostId || this.multiplayerSession.hostId;
+        this.multiplayerSession.seed = room.seed || this.multiplayerSession.seed;
         const friend = (room.players || []).find(player => player.id !== this.multiplayerSession.playerId && player.state);
         this.remotePlayerStatus?.setText(`ROOM ${room.code} - ${(room.players || []).length}/2`).setColor('#7cff8a');
         if (!friend?.state || !this.remotePlayer) {
             this.remotePlayer?.setVisible(false);
             this.remotePlayerName?.setVisible(false);
+            this.remoteAimLine?.setVisible(false);
             return;
+        }
+        if (!this.isMultiplayerHost() && Array.isArray(friend.state.enemies)) {
+            this.syncEnemiesFromMultiplayer(friend.state.enemies);
+            if (Number.isFinite(friend.state.wave) && friend.state.wave > GameState.wave) {
+                GameState.wave = friend.state.wave;
+                this.configureWave();
+                this.updateUI();
+            }
         }
         this.remotePlayer.setVisible(true);
         this.remotePlayerName?.setVisible(true);
@@ -3974,6 +4049,60 @@ class GameScene extends Phaser.Scene {
         this.remotePlayerName
             ?.setText(`${friend.name || 'FRIEND'}  W${friend.state.wave}  L${friend.state.level}`)
             .setPosition(friend.state.x, friend.state.y - 46);
+        if (this.remoteAimLine && Number.isFinite(friend.state.aimX) && Number.isFinite(friend.state.aimY)) {
+            this.remoteAimLine.clear();
+            this.remoteAimLine.lineStyle(4, friend.state.down ? 0x8290aa : 0x7ed2ff, 0.72);
+            this.remoteAimLine.lineBetween(friend.state.x, friend.state.y, friend.state.aimX, friend.state.aimY);
+            this.remoteAimLine.fillStyle(friend.state.down ? 0x8290aa : 0x7ed2ff, 0.92);
+            this.remoteAimLine.fillCircle(friend.state.aimX, friend.state.aimY, 7);
+            this.remoteAimLine.setVisible(true);
+        }
+    }
+
+    isMultiplayerHost() {
+        return !this.multiplayerSession?.code
+            || !this.multiplayerSession?.hostId
+            || this.multiplayerSession.hostId === this.multiplayerSession.playerId;
+    }
+
+    getMultiplayerEnemySnapshots() {
+        return this.enemies?.children.entries
+            .filter(enemy => enemy.active)
+            .slice(0, 90)
+            .map(enemy => ({
+                id: enemy.enemyId,
+                x: Math.round(enemy.x),
+                y: Math.round(enemy.y),
+                hp: Math.max(0, Math.round(enemy.hp || 0)),
+                maxHp: Math.max(1, Math.round(enemy.maxHp || 1)),
+                type: enemy.enemyType || 'melee'
+            })) || [];
+    }
+
+    syncEnemiesFromMultiplayer(snapshots = []) {
+        if (!this.enemies) return;
+        const incomingIds = new Set();
+        snapshots.forEach(snapshot => {
+            const id = Number(snapshot.id);
+            if (!Number.isFinite(id)) return;
+            incomingIds.add(id);
+            let enemy = this.multiplayerEnemySnapshots.get(id);
+            if (!enemy?.active) {
+                enemy = this.createEnemyAt(snapshot.x, snapshot.y, snapshot.type === 'thrower', id);
+                this.multiplayerEnemySnapshots.set(id, enemy);
+            }
+            enemy.hp = Math.max(0, Number(snapshot.hp) || enemy.hp || 1);
+            enemy.maxHp = Math.max(1, Number(snapshot.maxHp) || enemy.maxHp || 1);
+            enemy.setPosition(Number(snapshot.x) || enemy.x, Number(snapshot.y) || enemy.y);
+            enemy.body?.reset(enemy.x, enemy.y);
+            enemy.body?.setVelocity(0, 0);
+        });
+        for (const [id, enemy] of this.multiplayerEnemySnapshots) {
+            if (!incomingIds.has(id) && enemy?.active) {
+                enemy.destroy();
+                this.multiplayerEnemySnapshots.delete(id);
+            }
+        }
     }
 
     configureWave() {
@@ -4039,13 +4168,109 @@ class GameScene extends Phaser.Scene {
         });
 
         this.updateEnemies(time);
+        this.updateEquippedAura(time, enemies);
         this.updateAbilityCooldownHud();
+    }
+
+    updateEquippedAura(time, enemies) {
+        if (!this.selectedAuraOption || this.selectedAuraOption.id === 'none' || this.playerDown) return;
+        const auraName = this.selectedAuraOption.name;
+        const radius = 250;
+        const nearby = enemies.filter(enemy => enemy.active && Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= radius);
+        if (auraName === 'Gravity Aura') {
+            nearby.forEach(enemy => {
+                const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+                enemy.body.velocity.x += Math.cos(angle) * 10;
+                enemy.body.velocity.y += Math.sin(angle) * 10;
+            });
+            if (time >= (this.nextAuraPulseAt || 0)) {
+                this.nextAuraPulseAt = time + 700;
+                this.createAuraRing(0x8bd8ff, radius, 0.08);
+            }
+        } else if (auraName === 'Pulse Aura' && time >= (this.nextAuraPulseAt || 0)) {
+            this.nextAuraPulseAt = time + 2800;
+            this.createAuraRing(0xffd36a, 300, 0.18);
+            nearby.forEach(enemy => {
+                const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+                enemy.body.velocity.set(Math.cos(angle) * 360, Math.sin(angle) * 360);
+                this.damageEnemyFromAbility(enemy, 10, '#ffd36a');
+            });
+        } else if (auraName === 'Freeze Aura') {
+            nearby.forEach(enemy => {
+                enemy.body.velocity.scale(0.88);
+                if (time >= (enemy.nextAuraFreezeAt || 0) && Phaser.Math.Between(1, 6) === 1) {
+                    enemy.nextAuraFreezeAt = time + 1200;
+                    enemy.nextAttackAt = Math.max(enemy.nextAttackAt || 0, time + 700);
+                    enemy.setTint(0x88ccff);
+                    this.time.delayedCall(500, () => { if (enemy.active) enemy.clearTint(); });
+                    this.showDamageNumber(enemy.x, enemy.y, 'FREEZE', '#9dfff2');
+                }
+            });
+        } else if (auraName === 'Burn Aura' && time >= (this.nextAuraBurnAt || 0)) {
+            this.nextAuraBurnAt = time + 1000;
+            this.createAuraRing(0xff7d55, radius, 0.12);
+            nearby.forEach(enemy => this.damageEnemyFromAbility(enemy, 1, '#ff9b6b'));
+        } else if (auraName === 'Mirror Aura' && time >= (this.nextAuraMirrorAt || 0)) {
+            this.nextAuraMirrorAt = time + 1800;
+            const target = this.findNearestEnemy(this.player.x, this.player.y, 620);
+            if (target) {
+                const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
+                const shot = this.createPlayerBoba(this.player.x, this.player.y - 18, angle, this.playerDamage / 3, 0, 'aura-mirror');
+                shot?.setAlpha(0.78);
+                this.createAuraRing(0xd58cff, 190, 0.14);
+            }
+        }
+    }
+
+    createAuraRing(color, radius, alpha = 0.14) {
+        const ring = this.add.circle(this.player.x, this.player.y, 28, color, alpha)
+            .setStrokeStyle(3, color, 0.72)
+            .setDepth(2.8);
+        this.tweens.add({
+            targets: ring,
+            radius,
+            alpha: 0,
+            duration: 420,
+            ease: 'Sine.easeOut',
+            onComplete: () => ring.destroy()
+        });
+    }
+
+    triggerChaosAura(x, y, damage) {
+        const target = this.findNearestEnemy(x, y, 560);
+        this.createAuraRing(0xd58cff, 220, 0.18);
+        if (!target) {
+            GameState.health = Math.min(GameState.maxHealth, GameState.health + 2);
+            this.showDamageNumber(this.player.x, this.player.y - 36, '+2 HP', '#83f28f');
+            this.updateUI();
+            return;
+        }
+        const roll = Phaser.Math.Between(0, 4);
+        if (roll === 0) {
+            target.setTint(0x88ccff);
+            target.nextAttackAt = Math.max(target.nextAttackAt || 0, this.time.now + 900);
+            this.time.delayedCall(700, () => { if (target.active) target.clearTint(); });
+            this.showDamageNumber(target.x, target.y, 'CHAOS', '#d58cff');
+        } else if (roll === 1) {
+            this.damageEnemyFromAbility(target, damage * 0.35, '#d58cff');
+        } else if (roll === 2) {
+            const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
+            [-0.28, 0.28].forEach(offset => this.createPlayerBoba(this.player.x, this.player.y, angle + offset, damage * 0.45, 0, 'aura-chaos'));
+        } else if (roll === 3) {
+            target.body.velocity.scale(0.18);
+            target.setTint(0xff7d55);
+            this.damageEnemyFromAbility(target, 3, '#ff9b6b');
+        } else {
+            GameState.health = Math.min(GameState.maxHealth, GameState.health + 3);
+            this.showDamageNumber(this.player.x, this.player.y - 36, '+3 HP', '#83f28f');
+            this.updateUI();
+        }
     }
 
     validateProjectiles() {
         this.bobas.children.entries.forEach(boba => {
             if (!boba.active) return;
-            if (!['gun', 'wall-split', 'kill-split'].includes(boba.source)) {
+            if (!['gun', 'wall-split', 'kill-split', 'pet', 'charm-fracture', 'charm-reversal', 'charm-boomerang', 'aura-mirror', 'aura-chaos'].includes(boba.source)) {
                 boba.destroy();
                 return;
             }
@@ -4062,7 +4287,7 @@ class GameScene extends Phaser.Scene {
     validateEnemyProjectiles() {
         this.enemyProjectiles?.children.entries.forEach(projectile => {
             if (!projectile.active) return;
-            if (projectile.x < -80 || projectile.x > GAME_WIDTH + 80 || projectile.y < -80 || projectile.y > GAME_HEIGHT + 80) {
+            if (projectile.x < -80 || projectile.x > this.worldWidth + 80 || projectile.y < -80 || projectile.y > this.worldHeight + 80) {
                 projectile.destroy();
             }
         });
@@ -4224,6 +4449,7 @@ class GameScene extends Phaser.Scene {
     createAbilityScreenTinge(color, duration = 420, alpha = 0.12) {
         const overlay = this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, color, alpha)
             .setDepth(3.5)
+            .setScrollFactor(0)
             .setBlendMode(Phaser.BlendModes.ADD);
 
         this.time.delayedCall(duration, () => {
@@ -5181,6 +5407,13 @@ class GameScene extends Phaser.Scene {
         if (this.infiniteLoopCore) {
             this.fireInfiniteLoopShot(baseAngle, projectileDamage, volleyId);
         }
+        if (this.hasCharm('Reversal Charm')) {
+            const reverse = this.createPlayerBoba(muzzle.x, muzzle.y, baseAngle + Math.PI, projectileDamage * 0.7, 0, 'charm-reversal', volleyId);
+            reverse?.setTint(0xffd36a);
+        }
+        if (this.hasAura('Chaos Aura') && Phaser.Math.Between(1, 5) === 1) {
+            this.triggerChaosAura(muzzle.x, muzzle.y, projectileDamage);
+        }
         if (this.pulseWaveGenerator) {
             this.createPulseWave(muzzle.x, muzzle.y, projectileDamage * 0.5);
         }
@@ -5336,6 +5569,12 @@ class GameScene extends Phaser.Scene {
         } else if (source === 'kill-split') {
             boba.setTint(0xff9bd2);
             boba.setData('spawnDebug', 'kill');
+        } else if (source === 'charm-fracture') {
+            boba.setTint(0xffd36a);
+        } else if (source === 'charm-reversal' || source === 'charm-boomerang') {
+            boba.setTint(0xf6b84b);
+        } else if (source === 'aura-mirror' || source === 'aura-chaos') {
+            boba.setTint(0xd58cff);
         }
         this.time.delayedCall(500, () => {
             if (boba.active) {
@@ -5347,6 +5586,7 @@ class GameScene extends Phaser.Scene {
             : 1800;
         this.time.delayedCall(lifespan, () => {
             if (boba.active) {
+                if (this.tryBoomerangCharm(boba)) return;
                 boba.destroy();
             }
         });
@@ -5415,8 +5655,25 @@ class GameScene extends Phaser.Scene {
         }
 
         if (boba.bounceCount > boba.maxBounces) {
+            if (this.tryBoomerangCharm(boba)) return;
             boba.destroy();
         }
+    }
+
+    tryBoomerangCharm(boba) {
+        if (!this.hasCharm('Boomerang Charm') || !boba?.active || boba.source === 'charm-boomerang') return false;
+        if (Phaser.Math.Between(1, 7) !== 1) return false;
+        const angle = Phaser.Math.Angle.Between(boba.x, boba.y, this.player.x, this.player.y);
+        boba.source = 'charm-boomerang';
+        boba.hitEnemyIds = new Set();
+        boba.pierceRemaining = Math.max(1, boba.pierceRemaining || 0);
+        boba.body.velocity.set(Math.cos(angle) * this.projectileSpeed, Math.sin(angle) * this.projectileSpeed);
+        boba.setTint(0xf6b84b);
+        this.bobaCount = Math.min(this.maxBobaCount, this.bobaCount + 1);
+        this.showDamageNumber(boba.x, boba.y, '+AMMO', '#ffd36a');
+        this.updateBobaDisplay();
+        this.time.delayedCall(900, () => { if (boba.active) boba.destroy(); });
+        return true;
     }
 
     findNearestEnemy(x, y, maxDistance = Infinity) {
@@ -5506,19 +5763,20 @@ class GameScene extends Phaser.Scene {
 
     spawnEnemy() {
         if (this.waveTransitioning || this.enemiesSpawnedThisWave >= this.enemiesPerWave) return;
+        if (this.multiplayerSession?.code && !this.isMultiplayerHost()) return;
         const activeEnemies = this.enemies.children.entries.filter(enemy => enemy.active).length;
         if (activeEnemies >= this.maxActiveEnemies) return;
 
-        const side = Phaser.Math.Between(0, 3);
-        let x, y;
-        switch (side) {
-            case 0: x = Phaser.Math.Between(0, GAME_WIDTH); y = -30; break;
-            case 1: x = GAME_WIDTH + 30; y = Phaser.Math.Between(0, GAME_HEIGHT); break;
-            case 2: x = Phaser.Math.Between(0, GAME_WIDTH); y = GAME_HEIGHT + 30; break;
-            case 3: x = -30; y = Phaser.Math.Between(0, GAME_HEIGHT); break;
-        }
+        const topGate = (this.enemiesSpawnedThisWave % 2) === 0;
+        const x = (this.worldWidth / 2) + Phaser.Math.Between(-135, 135);
+        const y = topGate ? -42 : this.worldHeight + 42;
 
         const isThrower = GameState.wave >= 5 && (this.enemiesSpawnedThisWave + 1) % 6 === 0;
+        this.createEnemyAt(x, y, isThrower);
+        this.enemiesSpawnedThisWave++;
+    }
+
+    createEnemyAt(x, y, isThrower = false, forcedId = null) {
         const enemy = this.enemies.create(x, y, isThrower ? 'thrower_run_1' : 'enemy_run_1');
         enemy.setOrigin(0.5);
         enemy.setCollideWorldBounds(true);
@@ -5532,7 +5790,8 @@ class GameScene extends Phaser.Scene {
         enemy.hp = enemy.maxHp;
         enemy.nextAttackAt = 0;
         enemy.nextThrowAt = isThrower ? this.time.now + 500 : Infinity;
-        enemy.enemyId = ++this.enemyIdCounter;
+        enemy.enemyId = forcedId || ++this.enemyIdCounter;
+        this.enemyIdCounter = Math.max(this.enemyIdCounter, enemy.enemyId);
 
         // Health bar above enemy
         enemy.healthBg = this.add.image(enemy.x, enemy.y - 20, 'enemy_health_bg');
@@ -5552,7 +5811,7 @@ class GameScene extends Phaser.Scene {
             }
         });
 
-        this.enemiesSpawnedThisWave++;
+        return enemy;
     }
 
     hitEnemy(boba, enemy) {
@@ -5583,6 +5842,14 @@ class GameScene extends Phaser.Scene {
             this.applyMatchaPoison(enemy, boba.baseDamage || damage);
             this.healFromMatchaDamage(damage);
         }
+        if (this.hasCharm('Combo Charm')) {
+            if (this.time.now > (this.comboCharmResetAt || 0)) {
+                this.comboCharmHits = 0;
+            }
+            damage *= 1 + Math.min(1, (this.comboCharmHits || 0) * 0.08);
+            this.comboCharmHits = Math.min(13, (this.comboCharmHits || 0) + 1);
+            this.comboCharmResetAt = this.time.now + 2200;
+        }
         if (this.time.now < (enemy.petMarkedUntil || 0)) {
             damage *= 1.5;
             enemy.petMarkedUntil = 0;
@@ -5590,10 +5857,24 @@ class GameScene extends Phaser.Scene {
             this.showDamageNumber(enemy.x, enemy.y - 18, 'MARK!', '#ffcf7a');
         }
         this.showDamageNumber(enemy.x, enemy.y, damage);
+        if (this.hasCharm('Delay Charm')) {
+            const delayedX = enemy.x;
+            const delayedY = enemy.y;
+            this.time.delayedCall(320, () => this.createDelayedCharmBurst(delayedX, delayedY, damage * 0.1));
+        }
+        if (this.hasCharm('Fracture Charm') && boba.owner === 'player' && !boba.fractured && boba.source !== 'charm-fracture') {
+            this.fractureCharmShot(boba);
+            boba.fractured = true;
+        }
 
-        const hadPierce = (boba.pierceRemaining || 0) > 0;
+        const phasePierce = this.hasCharm('Phase Charm') && Phaser.Math.Between(1, 2) === 1;
+        const hadPierce = phasePierce || (boba.pierceRemaining || 0) > 0;
         if (hadPierce) {
-            boba.pierceRemaining--;
+            if (!phasePierce) {
+                boba.pierceRemaining--;
+            } else {
+                this.showDamageNumber(boba.x, boba.y - 16, 'PHASE', '#9dfff2');
+            }
             boba.pierceHits = (boba.pierceHits || 0) + 1;
         } else {
             boba.destroy();
@@ -5678,6 +5959,38 @@ class GameScene extends Phaser.Scene {
         GameState.enemiesKilledThisRun++;
         GameState.totalEnemiesKilled++;
         this.enemiesKilledThisWave++;
+    }
+
+    fractureCharmShot(boba) {
+        if (!boba?.active || !boba.body) return;
+        const angle = Math.atan2(boba.body.velocity.y, boba.body.velocity.x);
+        [-0.28, 0.28].forEach(offset => {
+            const shard = this.createPlayerBoba(boba.x, boba.y, angle + offset, (boba.damage || this.playerDamage) * 0.75, boba.wallSplitDepth || 0, 'charm-fracture', boba.volleyId || 0);
+            if (!shard) return;
+            shard.fractured = true;
+            shard.pierceRemaining = Math.max(0, boba.pierceRemaining || 0);
+            shard.setScale((boba.baseScale || this.projectileScale) * 0.72);
+        });
+    }
+
+    createDelayedCharmBurst(x, y, damage) {
+        const burst = this.add.circle(x, y, 18, BOBA_THEME.caramel, 0.16)
+            .setStrokeStyle(3, BOBA_THEME.caramel, 0.72)
+            .setDepth(3);
+        this.tweens.add({
+            targets: burst,
+            radius: 76,
+            alpha: 0,
+            duration: 260,
+            ease: 'Sine.easeOut',
+            onComplete: () => burst.destroy()
+        });
+        this.enemies.children.entries.forEach(enemy => {
+            if (!enemy.active) return;
+            if (Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) <= 76) {
+                this.damageEnemyFromAbility(enemy, damage, '#ffd36a');
+            }
+        });
     }
 
     killEnemyFromAbility(enemy) {
@@ -5802,6 +6115,12 @@ class GameScene extends Phaser.Scene {
         });
 
         if (GameState.health <= 0) {
+            if (this.multiplayerSession?.code) {
+                this.knockOutPlayer();
+                this.scheduleMultiplayerRespawn();
+                this.updateUI();
+                return;
+            }
             this.endRun();
             return;
         }
@@ -5901,8 +6220,37 @@ class GameScene extends Phaser.Scene {
         this.player.body.setVelocity(0);
         this.isReloading = false;
         this.reloadText.setVisible(false);
-        this.playerDownBanner.setVisible(true);
+        this.playerDownBanner.setText('PLAYER DOWN').setVisible(true);
         this.updateBobaDisplay();
+    }
+
+    scheduleMultiplayerRespawn() {
+        if (this.multiplayerRespawnTimer) return;
+        this.multiplayerRespawnAt = this.time.now + 5000;
+        this.playerDownBanner?.setText('RESPAWNING IN 5').setVisible(true);
+        this.multiplayerRespawnTimer = this.time.delayedCall(5000, () => {
+            this.multiplayerRespawnTimer = null;
+            this.multiplayerRespawnAt = 0;
+            this.respawnMultiplayerPlayer();
+        });
+    }
+
+    respawnMultiplayerPlayer() {
+        if (this.runEnded || !this.player?.active) return;
+        this.playerDown = false;
+        GameState.health = Math.max(1, Math.ceil(GameState.maxHealth * 0.6));
+        this.player.clearTint();
+        this.player.setAlpha(1);
+        this.player.body?.setVelocity(0, 0);
+        this.playerInvincibleUntil = this.time.now + 1200;
+        this.bobaCount = this.maxBobaCount;
+        this.isReloading = false;
+        this.reloadText?.setVisible(false);
+        this.playerDownBanner?.setVisible(false);
+        this.updateBobaDisplay();
+        this.updateUI();
+        this.createAbilityPulse(0x7cff8a, 118);
+        this.showDamageNumber(this.player.x, this.player.y - 42, 'BACK!', '#7cff8a');
     }
 
     revivePlayerForNextWave() {
@@ -5910,7 +6258,7 @@ class GameScene extends Phaser.Scene {
         GameState.health = Math.max(1, Math.ceil(GameState.maxHealth * 0.5));
         this.player.clearTint();
         this.player.setAlpha(1);
-        this.player.setPosition(GAME_CENTER_X, GAME_HEIGHT - 180);
+        this.player.setPosition(BATTLE_WORLD_CENTER_X, BATTLE_WORLD_CENTER_Y + 260);
         this.playerDownBanner.setVisible(false);
         this.bobaCount = this.maxBobaCount;
         this.isReloading = false;
@@ -5970,7 +6318,9 @@ class GameScene extends Phaser.Scene {
         this.scoreText.setText(`SCORE: ${GameState.score}`);
         this.levelText.setText(`LVL ${GameState.level}`);
         this.factoryStatusText.setText(`${this.enemiesKilledThisWave}/${this.enemiesPerWave} cleared`);
-        this.playerDownBanner.setVisible(false);
+        if (!this.playerDown) {
+            this.playerDownBanner.setVisible(false);
+        }
     }
 }
 
