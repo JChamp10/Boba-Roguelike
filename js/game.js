@@ -991,7 +991,7 @@ function forceSceneTransition(scene, targetKey, resetRun = true) {
 
     globalThis.setTimeout(() => {
         try {
-            const menuSideScenes = ['ControlsScene', 'IdleFactoryScene', 'PermaUpgradeScene', 'LeaderboardScene'];
+            const menuSideScenes = ['ControlsScene', 'IdleFactoryScene', 'PermaUpgradeScene', 'LeaderboardScene', 'MultiplayerScene'];
             const scenesToStop = new Set([...RUN_SCENE_KEYS, ...menuSideScenes]);
             if (targetKey === 'MenuScene') {
                 scenesToStop.add('MenuScene');
@@ -1035,13 +1035,17 @@ function hardSwitchScene(scene, targetKey) {
         if (currentKey !== 'IdleFactoryScene') scenePlugin.stop('IdleFactoryScene');
         if (currentKey !== 'PermaUpgradeScene') scenePlugin.stop('PermaUpgradeScene');
         if (currentKey !== 'LeaderboardScene') scenePlugin.stop('LeaderboardScene');
+        if (currentKey !== 'MultiplayerScene') scenePlugin.stop('MultiplayerScene');
     }
 
     scenePlugin.start(targetKey);
     scene.cleanSceneStartPending = false;
 }
 
-function startFreshRunFromMenu(scene) {
+function startFreshRunFromMenu(scene, keepMultiplayer = false) {
+    if (!keepMultiplayer) {
+        clearMultiplayerSession();
+    }
     sanitizeBuildState();
     const locked = getSelectedBuildLock();
     if (locked) {
@@ -1057,6 +1061,15 @@ function startFreshRunFromMenu(scene) {
     GameState.selectedGun = selectedGun;
     GameState.selectedCharacter = Math.max(0, DRINK_OPTIONS.findIndex(option => option.id === GameState.selectedDrink));
     hardSwitchScene(scene, 'GameScene');
+}
+
+function startFreshRunWithMultiplayer(scene, session) {
+    globalThis.BobaMultiplayerSession = session || null;
+    startFreshRunFromMenu(scene, true);
+}
+
+function clearMultiplayerSession() {
+    globalThis.BobaMultiplayerSession = null;
 }
 
 function drawSceneBackdrop(scene, accentColor = 0x2b3357) {
@@ -1823,10 +1836,11 @@ class MenuScene extends Phaser.Scene {
         const actions = [
             { text: 'Start', y: y - 112, cb: () => startFreshRunFromMenu(this), accent: 0xfff4d6 },
             { text: 'Build', y: y - 70, cb: () => this.scene.start('BuildSelectScene'), accent: 0xffd86f },
-            { text: 'Upgrades', y: y - 28, cb: () => this.scene.start('PermaUpgradeScene'), accent: 0x7ed2ff },
-            { text: 'Leaderboard', y: y + 14, cb: () => this.scene.start('LeaderboardScene'), accent: 0xc99af7 },
-            { text: 'Factory', y: y + 56, cb: () => this.scene.start('IdleFactoryScene'), accent: 0xf0b14b },
-            { text: 'Settings', y: y + 98, cb: () => this.scene.launch('ControlsScene'), accent: 0xff6fb0 }
+            { text: 'Multiplayer', y: y - 28, cb: () => this.scene.start('MultiplayerScene'), accent: 0x7cff8a },
+            { text: 'Upgrades', y: y + 14, cb: () => this.scene.start('PermaUpgradeScene'), accent: 0x7ed2ff },
+            { text: 'Leaderboard', y: y + 56, cb: () => this.scene.start('LeaderboardScene'), accent: 0xc99af7 },
+            { text: 'Factory', y: y + 98, cb: () => this.scene.start('IdleFactoryScene'), accent: 0xf0b14b },
+            { text: 'Settings', y: y + 140, cb: () => this.scene.launch('ControlsScene'), accent: 0xff6fb0 }
         ];
         actions.forEach(action => this.makeMenuTextButton(x, action.y, action.text, action.cb, action.accent));
     }
@@ -2212,6 +2226,134 @@ class MenuScene extends Phaser.Scene {
         });
 
         return btn;
+    }
+}
+
+// ============================================
+// MULTIPLAYER SCENE
+// ============================================
+class MultiplayerScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MultiplayerScene' });
+    }
+
+    create() {
+        resetRunUiState(this);
+        SaveManager.load();
+        MenuScene.prototype.createMenuBackdrop.call(this);
+        this.room = null;
+        this.playerId = null;
+        this.statusText = null;
+
+        this.add.text(GAME_CENTER_X, 84, 'MULTIPLAYER', {
+            fontSize: '46px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#102b1c',
+            strokeThickness: 7
+        }).setOrigin(0.5);
+
+        createNeonPanel(this, GAME_CENTER_X, 374, 700, 450, BRANCH_VISUALS.speed, 0.9);
+        this.codeText = this.add.text(GAME_CENTER_X, 220, 'NO ROOM YET', {
+            fontSize: '34px',
+            fill: '#7cff8a',
+            fontFamily: 'Arial Black',
+            stroke: '#06101a',
+            strokeThickness: 6
+        }).setOrigin(0.5);
+        this.playersText = this.add.text(GAME_CENTER_X, 304, 'Create a room, then send the code to your friend.', {
+            fontSize: '18px',
+            fill: '#fff4d6',
+            align: 'center',
+            fontFamily: 'Arial Black',
+            wordWrap: { width: 560 }
+        }).setOrigin(0.5);
+        this.statusText = this.add.text(GAME_CENTER_X, 412, 'Room sync uses the online API. If Render is sleeping, give it a few seconds.', {
+            fontSize: '13px',
+            fill: '#cfe6ff',
+            align: 'center',
+            wordWrap: { width: 560 }
+        }).setOrigin(0.5);
+
+        MenuScene.prototype.makeButton.call(this, 420, 506, 'CREATE ROOM', () => this.createRoom(), 0x7cff8a, 0x12351e, 190);
+        MenuScene.prototype.makeButton.call(this, 640, 506, 'JOIN CODE', () => this.joinRoom(), 0x7ed2ff, 0x102f42, 180);
+        MenuScene.prototype.makeButton.call(this, 860, 506, 'START RUN', () => this.startRoomRun(), 0xffd86f, 0x3b2c11, 180);
+        MenuScene.prototype.makeButton.call(this, 220, 686, 'BACK', () => this.scene.start('MenuScene'), 0x9fb3d9, 0x222a38, 170);
+
+        this.pollTimer = this.time.addEvent({
+            delay: 1200,
+            callback: () => this.pollRoom(),
+            loop: true
+        });
+        this.events.once('shutdown', () => {
+            this.pollTimer?.remove(false);
+        });
+    }
+
+    async createRoom() {
+        this.setStatus('Creating room...');
+        try {
+            const data = await window.BobaAuth.createMultiplayerRoom();
+            this.room = data.room;
+            this.playerId = data.playerId;
+            this.refreshRoomDisplay();
+            this.setStatus('Room ready. Share the code, then press START RUN when both players are here.');
+        } catch (error) {
+            this.setStatus(error.message || 'Could not create room.', false);
+        }
+    }
+
+    async joinRoom() {
+        const code = window.prompt('Enter room code:');
+        if (!code) return;
+        this.setStatus('Joining room...');
+        try {
+            const data = await window.BobaAuth.joinMultiplayerRoom(code);
+            this.room = data.room;
+            this.playerId = data.playerId;
+            this.refreshRoomDisplay();
+            this.setStatus('Joined. Press START RUN when ready.');
+        } catch (error) {
+            this.setStatus(error.message || 'Could not join room.', false);
+        }
+    }
+
+    async pollRoom() {
+        if (!this.room?.code) return;
+        try {
+            const data = await window.BobaAuth.fetchMultiplayerRoom(this.room.code);
+            this.room = data.room;
+            this.refreshRoomDisplay();
+        } catch (error) {
+            this.setStatus('Room poll failed. The room may have expired.', false);
+        }
+    }
+
+    refreshRoomDisplay() {
+        if (!this.room) {
+            this.codeText.setText('NO ROOM YET');
+            return;
+        }
+        this.codeText.setText(`ROOM ${this.room.code}`);
+        const players = this.room.players || [];
+        this.playersText.setText(players.map((player, index) => `${index + 1}. ${player.name || 'Player'}`).join('\n') || 'Waiting for players...');
+    }
+
+    setStatus(message, good = true) {
+        this.statusText?.setText(message || '');
+        this.statusText?.setColor(good ? '#cfe6ff' : '#ff9d9d');
+    }
+
+    startRoomRun() {
+        if (!this.room?.code || !this.playerId) {
+            this.setStatus('Create or join a room first.', false);
+            return;
+        }
+        startFreshRunWithMultiplayer(this, {
+            code: this.room.code,
+            playerId: this.playerId,
+            username: window.BobaAuth?.getUsername?.() || 'Player'
+        });
     }
 }
 
@@ -3510,6 +3652,7 @@ class GameScene extends Phaser.Scene {
         this.createPlayer();
         this.createEquippedPet();
         this.createHud();
+        this.setupMultiplayerRun();
 
         this.enemies = this.physics.add.group();
         this.bobas = this.physics.add.group();
@@ -3577,6 +3720,8 @@ class GameScene extends Phaser.Scene {
             this.input.off('pointerdown', this.beginManualFire, this);
             this.input.off('pointerup', this.endManualFire, this);
             this.input.off('pointerupoutside', this.endManualFire, this);
+            this.multiplayerPollTimer?.remove(false);
+            this.multiplayerPollTimer = null;
             this.physics.world.off('worldbounds', this.handleBobaWorldBounds, this);
         });
 
@@ -3695,6 +3840,106 @@ class GameScene extends Phaser.Scene {
         this.updateBobaDisplay();
     }
 
+    setupMultiplayerRun() {
+        this.multiplayerSession = globalThis.BobaMultiplayerSession || null;
+        this.remotePlayer = null;
+        this.remotePlayerName = null;
+        this.remotePlayerStatus = null;
+        this.lastMultiplayerStateAt = 0;
+        if (!this.multiplayerSession?.code || !this.multiplayerSession?.playerId) return;
+
+        this.remotePlayer = this.add.image(this.player.x + 70, this.player.y, this.playerTextureKey || 'player_boba')
+            .setOrigin(this.weaponProfile?.playerOrigin?.x || 0.5, this.weaponProfile?.playerOrigin?.y || 0.5)
+            .setScale((this.weaponProfile?.playerScale || 0.14) * 0.95)
+            .setAlpha(0.68)
+            .setTint(0x7ed2ff)
+            .setDepth(3.2)
+            .setVisible(false);
+        this.remotePlayerName = this.add.text(this.player.x + 70, this.player.y - 46, 'FRIEND', {
+            fontSize: '10px',
+            fill: '#7ed2ff',
+            fontFamily: 'Arial Black',
+            stroke: '#06101a',
+            strokeThickness: 4
+        }).setOrigin(0.5).setDepth(5).setVisible(false);
+        this.remotePlayerStatus = this.add.text(GAME_CENTER_X, 26, `ROOM ${this.multiplayerSession.code}`, {
+            fontSize: '12px',
+            fill: '#7cff8a',
+            fontFamily: 'Arial Black',
+            stroke: '#06101a',
+            strokeThickness: 4
+        }).setOrigin(0.5).setDepth(6);
+
+        this.multiplayerPollTimer = this.time.addEvent({
+            delay: 850,
+            callback: () => this.pollMultiplayerRoom(),
+            loop: true
+        });
+        this.sendMultiplayerState();
+        this.pollMultiplayerRoom();
+    }
+
+    updateMultiplayerRun(time = 0) {
+        if (!this.multiplayerSession?.code || !this.player?.active) return;
+        if (time >= (this.lastMultiplayerStateAt || 0) + 180) {
+            this.lastMultiplayerStateAt = time;
+            this.sendMultiplayerState();
+        }
+    }
+
+    sendMultiplayerState() {
+        if (!this.multiplayerSession?.code || !this.player?.active || !window.BobaAuth?.sendMultiplayerState) return;
+        const state = {
+            x: this.player.x,
+            y: this.player.y,
+            health: GameState.health,
+            maxHealth: GameState.maxHealth,
+            wave: GameState.wave,
+            score: GameState.score,
+            level: GameState.level,
+            down: this.playerDown || this.runEnded,
+            build: `${getDrinkOption().name} + ${getGunOption().name}`
+        };
+        window.BobaAuth.sendMultiplayerState(this.multiplayerSession.code, this.multiplayerSession.playerId, state)
+            .then(data => this.applyMultiplayerRoom(data.room))
+            .catch(() => {
+                this.remotePlayerStatus?.setText(`ROOM ${this.multiplayerSession.code} - SYNC LOST`).setColor('#ff9d9d');
+            });
+    }
+
+    pollMultiplayerRoom() {
+        if (!this.multiplayerSession?.code || !window.BobaAuth?.fetchMultiplayerRoom) return;
+        window.BobaAuth.fetchMultiplayerRoom(this.multiplayerSession.code)
+            .then(data => this.applyMultiplayerRoom(data.room))
+            .catch(() => {
+                this.remotePlayerStatus?.setText(`ROOM ${this.multiplayerSession.code} - WAITING`).setColor('#ffd27a');
+            });
+    }
+
+    applyMultiplayerRoom(room) {
+        if (!room || !this.multiplayerSession?.playerId) return;
+        const friend = (room.players || []).find(player => player.id !== this.multiplayerSession.playerId && player.state);
+        this.remotePlayerStatus?.setText(`ROOM ${room.code} - ${(room.players || []).length}/2`).setColor('#7cff8a');
+        if (!friend?.state || !this.remotePlayer) {
+            this.remotePlayer?.setVisible(false);
+            this.remotePlayerName?.setVisible(false);
+            return;
+        }
+        this.remotePlayer.setVisible(true);
+        this.remotePlayerName?.setVisible(true);
+        this.tweens.add({
+            targets: this.remotePlayer,
+            x: friend.state.x,
+            y: friend.state.y,
+            duration: 160,
+            ease: 'Linear'
+        });
+        this.remotePlayer.setAlpha(friend.state.down ? 0.28 : 0.68);
+        this.remotePlayerName
+            ?.setText(`${friend.name || 'FRIEND'}  W${friend.state.wave}  L${friend.state.level}`)
+            .setPosition(friend.state.x, friend.state.y - 46);
+    }
+
     configureWave() {
         const waveScale = getEnemyWaveScale(GameState.wave, 0.12);
         const postWaveFivePressure = GameState.wave > 5 ? 1 + Math.min(1.6, (GameState.wave - 5) * 0.14) : 1;
@@ -3723,6 +3968,7 @@ class GameScene extends Phaser.Scene {
         this.updateHealingPickups();
         this.updateOrbPet();
         this.updateEquippedPet(time);
+        this.updateMultiplayerRun(time);
         this.validateProjectiles();
         this.validateEnemyProjectiles();
 
@@ -5882,50 +6128,48 @@ class GameOverScene extends Phaser.Scene {
                 this.leaderboardSubmitText?.setText('Leaderboard submit failed.');
             });
         this.gameOverButtonBounds = [
-            { x: GAME_CENTER_X, y: 530, width: 260, height: 64, target: 'GameScene' },
-            { x: GAME_CENTER_X, y: 595, width: 260, height: 64, target: 'MenuScene' }
+            { x: GAME_CENTER_X - 138, y: 600, width: 230, height: 56, target: 'GameScene' },
+            { x: GAME_CENTER_X + 138, y: 600, width: 230, height: 56, target: 'MenuScene' }
         ];
 
-        drawSceneBackdrop(this, 0x6b4b86);
-        createPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 620, 530, 0x131a2a, 0x665a88, 0.96);
+        drawSceneBackdrop(this, 0x4e315f);
+        createNeonPanel(this, GAME_CENTER_X, GAME_CENTER_Y, 760, 500, BRANCH_VISUALS.damage, 0.92);
 
-        this.add.text(GAME_CENTER_X, 200, 'GAME OVER', {
-            fontSize: '56px', fill: '#ff8c6b', fontFamily: 'Arial Black'
+        this.add.text(GAME_CENTER_X, 134, 'RUN ENDED', {
+            fontSize: '48px',
+            fill: '#ff9f80',
+            fontFamily: 'Arial Black',
+            stroke: '#161018',
+            strokeThickness: 7
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 290, `Wave Reached: ${GameState.wave}`, {
-            fontSize: '24px', fill: '#fff'
+        this.add.text(GAME_CENTER_X, 184, 'The shop lights flicker, but the tapioca keeps flowing.', {
+            fontSize: '14px',
+            fill: '#cfe6ff',
+            align: 'center'
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 330, `Final Score: ${GameState.score}`, {
-            fontSize: '24px', fill: '#ffd700'
+        this.createGameOverStatCard(424, 278, 'WAVE', GameState.wave, 0x7ed2ff);
+        this.createGameOverStatCard(640, 278, 'SCORE', GameState.score, 0xffd86f);
+        this.createGameOverStatCard(856, 278, 'LEVEL', GameState.level, 0x7cff8a);
+        this.createGameOverStatCard(500, 414, 'TC EARNED', Math.floor(GameState.runTcEarned), 0x38d9ff);
+        this.createGameOverStatCard(780, 414, 'RAGE', Math.floor(GameState.runRageEarned), 0xff7d9d);
+
+        this.add.text(GAME_CENTER_X, 496, `Lifetime kills ${GameState.totalEnemiesKilled}   |   Tapioca ${Math.floor(GameState.tapioca)}`, {
+            fontSize: '14px',
+            fill: '#b8d8ff',
+            fontFamily: 'Arial Black'
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 370, `Level: ${GameState.level}`, {
-            fontSize: '20px', fill: '#3498db'
-        }).setOrigin(0.5);
-
-        this.leaderboardSubmitText = this.add.text(GAME_CENTER_X, 410, 'Saving leaderboard score...', {
+        this.leaderboardSubmitText = this.add.text(GAME_CENTER_X, 532, 'Saving leaderboard score...', {
             fontSize: '13px',
             fill: '#b8c9d8',
             align: 'center',
             wordWrap: { width: 480 }
         }).setOrigin(0.5);
 
-        this.add.text(GAME_CENTER_X, 410, `TC EARNED THIS RUN: ${Math.floor(GameState.runTcEarned)}`, {
-            fontSize: '22px', fill: '#66ccff', fontFamily: 'Arial Black'
-        }).setOrigin(0.5);
-
-        this.add.text(GAME_CENTER_X, 440, `RAGE COLLECTED THIS RUN: ${Math.floor(GameState.runRageEarned)}`, {
-            fontSize: '16px', fill: '#888'
-        }).setOrigin(0.5);
-
-        this.add.text(GAME_CENTER_X, 470, `Lifetime Kills: ${GameState.totalEnemiesKilled}   |   Tapioca: ${Math.floor(GameState.tapioca)}`, {
-            fontSize: '16px', fill: '#b8d8ff'
-        }).setOrigin(0.5);
-
-        this.makeGameOverButton(GAME_CENTER_X, 530, 'PLAY AGAIN', () => this.startFreshRun());
-        this.makeGameOverButton(GAME_CENTER_X, 595, 'MAIN MENU', () => this.returnToMenu());
+        this.makeGameOverButton(GAME_CENTER_X - 138, 600, 'PLAY AGAIN', () => this.startFreshRun());
+        this.makeGameOverButton(GAME_CENTER_X + 138, 600, 'MAIN MENU', () => this.returnToMenu());
         this.createDomGameOverButtons();
         this.fallbackGameOverClick = event => this.handleFallbackGameOverClick(event);
         document.addEventListener('pointerdown', this.fallbackGameOverClick, true);
@@ -5937,21 +6181,39 @@ class GameOverScene extends Phaser.Scene {
     }
 
     makeGameOverButton(x, y, label, callback) {
-        const hit = this.add.rectangle(x, y, 220, 54, 0x4a5160, 1)
-            .setStrokeStyle(2, 0x9aa7bd)
+        const hit = this.add.rectangle(x, y, 220, 46, 0x121827, 0.96)
+            .setStrokeStyle(3, 0x9aa7bd, 0.95)
             .setInteractive({ useHandCursor: true })
             .setDepth(20);
         const text = this.add.text(x, y, label, {
-            fontSize: '20px',
+            fontSize: '17px',
             fill: '#fff7e6',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5).setDepth(21);
         const press = () => callback();
-        hit.on('pointerover', () => hit.setFillStyle(0x5e687a, 1));
-        hit.on('pointerout', () => hit.setFillStyle(0x4a5160, 1));
+        hit.on('pointerover', () => hit.setFillStyle(0x24314a, 1).setStrokeStyle(3, 0xffd86f, 1));
+        hit.on('pointerout', () => hit.setFillStyle(0x121827, 0.96).setStrokeStyle(3, 0x9aa7bd, 0.95));
         hit.on('pointerdown', press);
         text.setInteractive({ useHandCursor: true }).on('pointerdown', press);
         return { hit, text };
+    }
+
+    createGameOverStatCard(x, y, label, value, accent) {
+        this.add.rectangle(x, y, 176, 88, 0x07121d, 0.64)
+            .setStrokeStyle(2, accent, 0.72)
+            .setDepth(4);
+        this.add.text(x, y - 24, label, {
+            fontSize: '12px',
+            fill: '#cfe6ff',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5).setDepth(5);
+        this.add.text(x, y + 12, String(value), {
+            fontSize: '27px',
+            fill: '#fff4d6',
+            fontFamily: 'Arial Black',
+            stroke: '#06101a',
+            strokeThickness: 5
+        }).setOrigin(0.5).setDepth(5);
     }
 
     createDomGameOverButtons() {
@@ -5975,7 +6237,7 @@ class GameOverScene extends Phaser.Scene {
             button.style.pointerEvents = 'auto';
             button.style.background = '#596274';
             button.style.color = '#fff7e6';
-            button.style.font = '800 20px Arial, sans-serif';
+            button.style.font = '800 17px Arial, sans-serif';
             button.style.textShadow = '0 2px 0 rgba(0,0,0,0.45)';
             button.addEventListener('click', event => {
                 event.preventDefault();
@@ -5983,12 +6245,12 @@ class GameOverScene extends Phaser.Scene {
                 callback();
             });
             document.body.appendChild(button);
-            return { button, gameX, gameY, width: 220, height: 54 };
+            return { button, gameX, gameY, width: 220, height: 46 };
         };
 
         this.domGameOverButtons = [
-            makeButton('Play again', GAME_CENTER_X, 530, () => this.startFreshRun()),
-            makeButton('Main menu', GAME_CENTER_X, 595, () => this.returnToMenu())
+            makeButton('Play again', GAME_CENTER_X - 138, 600, () => this.startFreshRun()),
+            makeButton('Main menu', GAME_CENTER_X + 138, 600, () => this.returnToMenu())
         ];
         this.positionDomButtons = () => {
             const rect = canvas.getBoundingClientRect();
@@ -6238,7 +6500,7 @@ const config = {
     parent: 'game-root',
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
-    scene: [BootScene, MenuScene, BuildSelectScene, IdleFactoryScene, PermaUpgradeScene, LeaderboardScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
+    scene: [BootScene, MenuScene, MultiplayerScene, BuildSelectScene, IdleFactoryScene, PermaUpgradeScene, LeaderboardScene, ControlsScene, GameScene, PauseScene, UpgradeScene, GameOverScene, FactoryScene],
     input: {
         mouse: {
             preventDefaultWheel: false

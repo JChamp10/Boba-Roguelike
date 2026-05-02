@@ -166,6 +166,31 @@
         }
     }
 
+    async function createMultiplayerRoom() {
+        return request('/multiplayer/rooms', {
+            method: 'POST',
+            body: JSON.stringify({ username: getUsername() })
+        });
+    }
+
+    async function joinMultiplayerRoom(code) {
+        return request(`/multiplayer/rooms/${encodeURIComponent(String(code || '').trim().toUpperCase())}/join`, {
+            method: 'POST',
+            body: JSON.stringify({ username: getUsername() })
+        });
+    }
+
+    async function fetchMultiplayerRoom(code) {
+        return request(`/multiplayer/rooms/${encodeURIComponent(String(code || '').trim().toUpperCase())}`);
+    }
+
+    async function sendMultiplayerState(code, playerId, state) {
+        return request(`/multiplayer/rooms/${encodeURIComponent(String(code || '').trim().toUpperCase())}/state`, {
+            method: 'POST',
+            body: JSON.stringify({ playerId, state })
+        });
+    }
+
     function encodeSaveCode(payload) {
         const json = JSON.stringify(payload);
         return btoa(unescape(encodeURIComponent(json)));
@@ -302,6 +327,10 @@
         setApiUrl,
         getLastLeaderboardSubmit: () => lastLeaderboardSubmit,
         resetLeaderboard,
+        createMultiplayerRoom,
+        joinMultiplayerRoom,
+        fetchMultiplayerRoom,
+        sendMultiplayerState,
         exportSaveCode,
         importSaveCode,
         setProfileToolsVisible

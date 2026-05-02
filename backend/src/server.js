@@ -27,6 +27,54 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 
+const multiplayerRooms = new Map();
+const MULTIPLAYER_ROOM_TTL_MS = 1000 * 60 * 60;
+
+function makeRoomCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 5; i++) {
+        code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    return code;
+}
+
+function makePlayerId() {
+    return crypto.randomBytes(8).toString('hex');
+}
+
+function normalizeRoomCode(code) {
+    return String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+}
+
+function sanitizeMultiplayerName(name) {
+    return String(name || 'Player').trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'Player';
+}
+
+function cleanupMultiplayerRooms() {
+    const now = Date.now();
+    for (const [code, room] of multiplayerRooms) {
+        if (now - room.updatedAt > MULTIPLAYER_ROOM_TTL_MS) {
+            multiplayerRooms.delete(code);
+        }
+    }
+}
+
+function publicRoom(room) {
+    return {
+        code: room.code,
+        createdAt: room.createdAt,
+        updatedAt: room.updatedAt,
+        players: Object.values(room.players).map(player => ({
+            id: player.id,
+            name: player.name,
+            joinedAt: player.joinedAt,
+            updatedAt: player.updatedAt,
+            state: player.state || null
+        }))
+    };
+}
+
 app.get('/', (req, res) => {
     res.json({
         ok: true,
@@ -259,6 +307,94 @@ app.post('/leaderboard/reset', async (req, res, next) => {
     } catch (error) {
         next(error);
     }
+});
+
+app.post('/multiplayer/rooms', (req, res) => {
+    cleanupMultiplayerRooms();
+    let code = makeRoomCode();
+    while (multiplayerRooms.has(code)) {
+        code = makeRoomCode();
+    }
+    const playerId = makePlayerId();
+    const now = Date.now();
+    const room = {
+        code,
+        createdAt: now,
+        updatedAt: now,
+        players: {
+            [playerId]: {
+                id: playerId,
+                name: sanitizeMultiplayerName(req.body.username),
+                joinedAt: now,
+                updatedAt: now,
+                state: null
+            }
+        }
+    };
+    multiplayerRooms.set(code, room);
+    res.status(201).json({ room: publicRoom(room), playerId });
+});
+
+app.post('/multiplayer/rooms/:code/join', (req, res) => {
+    cleanupMultiplayerRooms();
+    const code = normalizeRoomCode(req.params.code);
+    const room = multiplayerRooms.get(code);
+    if (!room) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+    const playerIds = Object.keys(room.players);
+    if (playerIds.length >= 2) {
+        return res.status(409).json({ error: 'Room is full' });
+    }
+    const playerId = makePlayerId();
+    const now = Date.now();
+    room.players[playerId] = {
+        id: playerId,
+        name: sanitizeMultiplayerName(req.body.username),
+        joinedAt: now,
+        updatedAt: now,
+        state: null
+    };
+    room.updatedAt = now;
+    res.json({ room: publicRoom(room), playerId });
+});
+
+app.get('/multiplayer/rooms/:code', (req, res) => {
+    cleanupMultiplayerRooms();
+    const room = multiplayerRooms.get(normalizeRoomCode(req.params.code));
+    if (!room) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+    res.json({ room: publicRoom(room) });
+});
+
+app.post('/multiplayer/rooms/:code/state', (req, res) => {
+    cleanupMultiplayerRooms();
+    const room = multiplayerRooms.get(normalizeRoomCode(req.params.code));
+    if (!room) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+    const player = room.players[String(req.body.playerId || '')];
+    if (!player) {
+        return res.status(403).json({ error: 'Player is not in this room' });
+    }
+    const rawState = req.body.state || {};
+    const now = Date.now();
+    player.state = {
+        x: Math.max(0, Math.min(1280, Number(rawState.x) || 0)),
+        y: Math.max(0, Math.min(720, Number(rawState.y) || 0)),
+        health: Math.max(0, Math.floor(Number(rawState.health) || 0)),
+        maxHealth: Math.max(1, Math.floor(Number(rawState.maxHealth) || 100)),
+        wave: Math.max(1, Math.floor(Number(rawState.wave) || 1)),
+        score: Math.max(0, Math.floor(Number(rawState.score) || 0)),
+        level: Math.max(1, Math.floor(Number(rawState.level) || 1)),
+        down: !!rawState.down,
+        build: String(rawState.build || '').slice(0, 48),
+        updatedAt: now
+    };
+    player.updatedAt = now;
+    room.updatedAt = now;
+    res.json({ room: publicRoom(room) });
 });
 
 app.use((error, req, res, next) => {
