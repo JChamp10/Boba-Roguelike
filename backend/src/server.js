@@ -65,6 +65,8 @@ function publicRoom(room) {
         code: room.code,
         hostId: room.hostId,
         seed: room.seed,
+        startedAt: room.startedAt || null,
+        startedBy: room.startedBy || null,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
         players: Object.values(room.players).map(player => ({
@@ -323,6 +325,8 @@ app.post('/multiplayer/rooms', (req, res) => {
         code,
         hostId: playerId,
         seed: crypto.randomInt(1, 1000000000),
+        startedAt: null,
+        startedBy: null,
         createdAt: now,
         updatedAt: now,
         players: {
@@ -369,6 +373,23 @@ app.get('/multiplayer/rooms/:code', (req, res) => {
     if (!room) {
         return res.status(404).json({ error: 'Room not found' });
     }
+    res.json({ room: publicRoom(room) });
+});
+
+app.post('/multiplayer/rooms/:code/start', (req, res) => {
+    cleanupMultiplayerRooms();
+    const room = multiplayerRooms.get(normalizeRoomCode(req.params.code));
+    if (!room) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+    const playerId = String(req.body.playerId || '');
+    if (playerId !== room.hostId) {
+        return res.status(403).json({ error: 'Only the party leader can start the run' });
+    }
+    const now = Date.now();
+    room.startedAt = now + 2500;
+    room.startedBy = playerId;
+    room.updatedAt = now;
     res.json({ room: publicRoom(room) });
 });
 

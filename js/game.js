@@ -8,6 +8,13 @@ const BATTLE_WORLD_WIDTH = 2200;
 const BATTLE_WORLD_HEIGHT = 1500;
 const BATTLE_WORLD_CENTER_X = BATTLE_WORLD_WIDTH / 2;
 const BATTLE_WORLD_CENTER_Y = BATTLE_WORLD_HEIGHT / 2;
+const MAP_DEAD_AREAS = [
+    { type: 'water', x: 410, y: 470, width: 300, height: 170, label: 'BOBA BROOK' },
+    { type: 'water', x: 1760, y: 1130, width: 260, height: 210, label: 'SUGAR POOL' },
+    { type: 'trees', x: 760, y: 1040, width: 270, height: 190 },
+    { type: 'trees', x: 1425, y: 430, width: 300, height: 200 },
+    { type: 'trees', x: 1195, y: 1260, width: 230, height: 150 }
+];
 // GAMEPLAY TUNING: change these first when balancing pickups, passive income, and store boosts.
 const HEALING_ORB_HEAL_AMOUNT = 5;
 const XP_ORB_MAGNET_RANGE = 210;
@@ -625,7 +632,7 @@ const PERMA_STORE_VISUALS = {
     menuDamage: { theme: 'damage', tag: 'BOOST', icon: 'DMG', assetKey: 'perma_damage_1', main: '+1%', sub: 'Damage per level' },
     menuReload: { theme: 'speed', tag: 'BOOST', icon: 'RLD', assetKey: 'perma_reload_1', main: '+1%', sub: 'Reload per level' },
     menuHealth: { theme: 'health', tag: 'BOOST', icon: 'HP', assetKey: 'perma_health_1', main: '+1', sub: 'Max HP per level' },
-    menuAmmo: { theme: 'machine', tag: 'BOOST', icon: 'AMMO', main: '+1', sub: 'Ammo per level' },
+    menuAmmo: { theme: 'machine', tag: 'BOOST', icon: 'AMMO', assetKey: 'perma_ammo_1', main: '+1', sub: 'Ammo per level' },
     menuRageBonus: { theme: 'runboost', tag: 'RUN BOOST', icon: 'RAGE', assetKey: 'temp_rage_2', main: '+2%', sub: 'Rage gain' },
     menuRunDamage: { theme: 'damage', tag: 'RUN BOOST', icon: 'DMG', assetKey: 'temp_damage_5', main: '+5%', sub: 'Run damage' },
     menuXpBonus: { theme: 'speed', tag: 'RUN BOOST', icon: 'XP', assetKey: 'temp_xp_5', main: '+5%', sub: 'XP gain' }
@@ -1195,8 +1202,10 @@ function createPermanentStoreCard(scene, x, y, upgrade, width, height) {
     const useCardArt = visual.assetKey && scene.textures.exists(visual.assetKey);
 
     if (useCardArt) {
-        const cardArt = scene.add.image(0, 0, visual.assetKey)
-            .setDisplaySize(width, height);
+        const cardArt = scene.add.image(0, 0, visual.assetKey);
+        const source = scene.textures.get(visual.assetKey).getSourceImage();
+        const artScale = Math.min(width / source.width, height / source.height);
+        cardArt.setScale(artScale);
         const level = scene.add.text(0, top + height - 15, '', {
             fontSize: '10px',
             fill: '#fff7e6',
@@ -1340,6 +1349,7 @@ const BOOT_IMAGE_ASSETS = [
     { key: 'perma_health_1', path: 'assets/Perma and Temp Upgrades/Health 1% Permanant.png' },
     { key: 'perma_reload_1', path: 'assets/Perma and Temp Upgrades/Reload Speed 1% permanant.png' },
     { key: 'perma_speed_1', path: 'assets/Perma and Temp Upgrades/Speed 1% Permanant.png' },
+    { key: 'perma_ammo_1', path: 'assets/UpgradeCards/ammo.png' },
     { key: 'temp_rage_2', path: 'assets/Perma and Temp Upgrades/Rage.png' },
     { key: 'temp_xp_5', path: 'assets/Perma and Temp Upgrades/XP.png' },
     { key: 'boost_pet_0', path: 'assets/Pet/tile000.png' },
@@ -2251,6 +2261,8 @@ class MenuScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
         this.add.rectangle(x, y - 17, width - 20, 2, 0xffffff, 0.18);
         const label = this.add.text(x, y, text, { fontSize: '15px', fill: '#fff7e6', fontFamily: 'Arial Black' }).setOrigin(0.5);
+        btn.bg = btn;
+        btn.label = label;
 
         btn.on('pointerover', () => {
             btn.setFillStyle(fill + 0x101010, 1).setStrokeStyle(4, BOBA_THEME.caramel, 1);
@@ -2284,6 +2296,7 @@ class MultiplayerScene extends Phaser.Scene {
         this.room = null;
         this.playerId = null;
         this.statusText = null;
+        this.launchingRun = false;
 
         this.add.text(GAME_CENTER_X, 84, 'MULTIPLAYER', {
             fontSize: '46px',
@@ -2317,11 +2330,11 @@ class MultiplayerScene extends Phaser.Scene {
 
         MenuScene.prototype.makeButton.call(this, 420, 506, 'CREATE ROOM', () => this.createRoom(), 0x7cff8a, 0x12351e, 190);
         MenuScene.prototype.makeButton.call(this, 640, 506, 'JOIN CODE', () => this.joinRoom(), 0x7ed2ff, 0x102f42, 180);
-        MenuScene.prototype.makeButton.call(this, 860, 506, 'START RUN', () => this.startRoomRun(), 0xffd86f, 0x3b2c11, 180);
+        this.startButton = MenuScene.prototype.makeButton.call(this, 860, 506, 'START RUN', () => this.startRoomRun(), 0xffd86f, 0x3b2c11, 180);
         MenuScene.prototype.makeButton.call(this, 220, 686, 'BACK', () => this.scene.start('MenuScene'), 0x9fb3d9, 0x222a38, 170);
 
         this.pollTimer = this.time.addEvent({
-            delay: 1200,
+            delay: 500,
             callback: () => this.pollRoom(),
             loop: true
         });
@@ -2337,7 +2350,7 @@ class MultiplayerScene extends Phaser.Scene {
             this.room = data.room;
             this.playerId = data.playerId;
             this.refreshRoomDisplay();
-            this.setStatus('Room ready. Share the code, then press START RUN when both players are here.');
+            this.setStatus('You are party leader. Share the code, then press START RUN.');
         } catch (error) {
             this.setStatus(error.message || 'Could not create room.', false);
         }
@@ -2352,7 +2365,7 @@ class MultiplayerScene extends Phaser.Scene {
             this.room = data.room;
             this.playerId = data.playerId;
             this.refreshRoomDisplay();
-            this.setStatus('Joined. Press START RUN when ready.');
+            this.setStatus('Joined. Waiting for the party leader to start.');
         } catch (error) {
             this.setStatus(error.message || 'Could not join room.', false);
         }
@@ -2364,6 +2377,7 @@ class MultiplayerScene extends Phaser.Scene {
             const data = await window.BobaAuth.fetchMultiplayerRoom(this.room.code);
             this.room = data.room;
             this.refreshRoomDisplay();
+            this.maybeLaunchStartedRoom();
         } catch (error) {
             this.setStatus('Room poll failed. The room may have expired.', false);
         }
@@ -2376,7 +2390,10 @@ class MultiplayerScene extends Phaser.Scene {
         }
         this.codeText.setText(`ROOM ${this.room.code}`);
         const players = this.room.players || [];
-        this.playersText.setText(players.map((player, index) => `${index + 1}. ${player.name || 'Player'}`).join('\n') || 'Waiting for players...');
+        this.playersText.setText(players.map((player, index) => `${index + 1}. ${player.name || 'Player'}${player.id === this.room.hostId ? '  LEADER' : ''}`).join('\n') || 'Waiting for players...');
+        const leader = this.playerId && this.room.hostId === this.playerId;
+        this.startButton?.label?.setText(leader ? 'START RUN' : 'WAITING');
+        this.startButton?.bg?.setAlpha(leader ? 1 : 0.48);
     }
 
     setStatus(message, good = true) {
@@ -2384,11 +2401,36 @@ class MultiplayerScene extends Phaser.Scene {
         this.statusText?.setColor(good ? '#cfe6ff' : '#ff9d9d');
     }
 
-    startRoomRun() {
+    async startRoomRun() {
         if (!this.room?.code || !this.playerId) {
             this.setStatus('Create or join a room first.', false);
             return;
         }
+        if (this.room.hostId !== this.playerId) {
+            this.setStatus('Only the party leader can start the run.', false);
+            return;
+        }
+        this.setStatus('Starting run for the room...');
+        try {
+            const data = await window.BobaAuth.startMultiplayerRoom(this.room.code, this.playerId);
+            this.room = data.room;
+            this.refreshRoomDisplay();
+            this.maybeLaunchStartedRoom();
+        } catch (error) {
+            this.setStatus(error.message || 'Could not start room.', false);
+        }
+    }
+
+    maybeLaunchStartedRoom() {
+        if (!this.room?.startedAt || this.launchingRun) return;
+        this.launchingRun = true;
+        const delay = Math.max(0, Number(this.room.startedAt) - Date.now());
+        this.setStatus(`Run starts in ${Math.max(1, Math.ceil(delay / 1000))}...`);
+        this.time.delayedCall(delay, () => this.beginRoomRun());
+    }
+
+    beginRoomRun() {
+        if (!this.room?.code || !this.playerId) return;
         startFreshRunWithMultiplayer(this, {
             code: this.room.code,
             playerId: this.playerId,
@@ -3715,6 +3757,9 @@ class GameScene extends Phaser.Scene {
         this.enemyProjectiles = this.physics.add.group();
         this.xpPickups = this.physics.add.group();
         this.healingPickups = this.physics.add.group();
+        this.createMapDeadAreas();
+        this.physics.add.collider(this.player, this.deadAreaBodies);
+        this.physics.add.collider(this.enemies, this.deadAreaBodies);
         this.physics.add.overlap(this.player, this.xpPickups, this.collectXpPickup, null, this);
         this.physics.add.overlap(this.player, this.healingPickups, this.collectHealingPickup, null, this);
         this.physics.add.overlap(this.player, this.enemyProjectiles, this.hitPlayerWithEnemyProjectile, null, this);
@@ -3825,16 +3870,130 @@ class GameScene extends Phaser.Scene {
         }
         const gateGraphics = this.add.graphics().setDepth(0.4);
         [
-            { x: centerX, y: 32, color: BOBA_THEME.lychee },
-            { x: centerX, y: this.worldHeight - 32, color: BOBA_THEME.aqua }
+            { x: 36, y: centerY, color: BOBA_THEME.lychee, facing: 1, name: 'TARO TEA' },
+            { x: this.worldWidth - 36, y: centerY, color: BOBA_THEME.aqua, facing: -1, name: 'PEARL POP' }
         ].forEach(gate => {
+            const shopX = gate.x + (gate.facing * 58);
+            const awningX = gate.x + (gate.facing * 70);
             gateGraphics.fillStyle(0x07121d, 0.72);
-            gateGraphics.fillRoundedRect(gate.x - 150, gate.y - 28, 300, 56, 8);
+            gateGraphics.fillRoundedRect(shopX - 52, gate.y - 114, 104, 228, 10);
             gateGraphics.lineStyle(5, gate.color, 0.8);
-            gateGraphics.strokeRoundedRect(gate.x - 150, gate.y - 28, 300, 56, 8);
-            gateGraphics.lineStyle(2, 0xfff4c2, 0.5);
-            gateGraphics.lineBetween(gate.x - 112, gate.y, gate.x + 112, gate.y);
+            gateGraphics.strokeRoundedRect(shopX - 52, gate.y - 114, 104, 228, 10);
+            gateGraphics.fillStyle(0xfff4c2, 0.9);
+            gateGraphics.fillRect(awningX - 58, gate.y - 102, 116, 18);
+            gateGraphics.fillStyle(gate.color, 0.9);
+            for (let stripe = 0; stripe < 4; stripe++) {
+                gateGraphics.fillRect(awningX - 54 + (stripe * 28), gate.y - 102, 14, 18);
+            }
+            gateGraphics.fillStyle(0x10243a, 0.96);
+            gateGraphics.fillRoundedRect(shopX - 28, gate.y - 56, 56, 112, 8);
+            gateGraphics.lineStyle(3, 0xfff4c2, 0.52);
+            gateGraphics.strokeRoundedRect(shopX - 28, gate.y - 56, 56, 112, 8);
+            gateGraphics.fillStyle(gate.color, 0.28);
+            gateGraphics.fillCircle(shopX, gate.y - 6, 21);
+            gateGraphics.fillStyle(0x0b101b, 0.85);
+            gateGraphics.fillCircle(shopX - 7, gate.y - 2, 4);
+            gateGraphics.fillCircle(shopX + 8, gate.y + 7, 4);
+            gateGraphics.fillCircle(shopX + 1, gate.y + 16, 4);
+            gateGraphics.lineStyle(5, gate.color, 0.84);
+            gateGraphics.lineBetween(gate.x, gate.y - 78, gate.x, gate.y + 78);
+            gateGraphics.lineStyle(2, 0xfff4c2, 0.58);
+            gateGraphics.lineBetween(gate.x + (gate.facing * 18), gate.y - 54, gate.x + (gate.facing * 18), gate.y + 54);
+            this.add.text(shopX, gate.y - 78, gate.name, {
+                fontSize: '13px',
+                fill: '#fff7e6',
+                fontFamily: 'Arial Black',
+                stroke: '#07121d',
+                strokeThickness: 4
+            }).setOrigin(0.5).setDepth(0.45);
         });
+    }
+
+    createMapDeadAreas() {
+        this.deadAreaBodies = this.physics.add.staticGroup();
+        MAP_DEAD_AREAS.forEach(area => {
+            const blocker = this.add.zone(area.x, area.y, area.width, area.height);
+            this.physics.add.existing(blocker, true);
+            this.deadAreaBodies.add(blocker);
+            blocker.body.setSize(area.width, area.height);
+            blocker.body.updateFromGameObject();
+
+            if (area.type === 'water') {
+                this.drawWaterDeadArea(area);
+            } else {
+                this.drawTreeDeadArea(area);
+            }
+        });
+    }
+
+    drawWaterDeadArea(area) {
+        const { x, y, width, height } = area;
+        const g = this.add.graphics().setDepth(0.65);
+        g.fillStyle(0x06162a, 0.86);
+        g.fillRoundedRect(x - (width / 2), y - (height / 2), width, height, 18);
+        g.lineStyle(6, 0x38d9ff, 0.62);
+        g.strokeRoundedRect(x - (width / 2), y - (height / 2), width, height, 18);
+        g.lineStyle(2, 0xff6fdf, 0.42);
+        g.strokeRoundedRect(x - (width / 2) + 10, y - (height / 2) + 10, width - 20, height - 20, 12);
+
+        for (let i = 0; i < 6; i++) {
+            const waveY = y - (height * 0.32) + (i * height * 0.13);
+            const startX = x - (width * 0.38) + ((i % 2) * 26);
+            g.lineStyle(3, i % 2 ? 0x9dfff2 : 0x38d9ff, 0.38);
+            g.beginPath();
+            g.moveTo(startX, waveY);
+            for (let step = 1; step <= 5; step++) {
+                g.lineTo(startX + (step * width * 0.14), waveY + (step % 2 === 0 ? -8 : 8));
+            }
+            g.strokePath();
+        }
+
+        this.add.text(x, y, area.label || 'WATER', {
+            fontSize: '14px',
+            fill: '#9dfff2',
+            fontFamily: 'Arial Black',
+            stroke: '#06121d',
+            strokeThickness: 4
+        }).setOrigin(0.5).setDepth(0.7).setAlpha(0.82);
+    }
+
+    drawTreeDeadArea(area) {
+        const { x, y, width, height } = area;
+        const g = this.add.graphics().setDepth(0.68);
+        g.fillStyle(0x102817, 0.72);
+        g.fillRoundedRect(x - (width / 2), y - (height / 2), width, height, 18);
+        g.lineStyle(5, 0x83f28f, 0.54);
+        g.strokeRoundedRect(x - (width / 2), y - (height / 2), width, height, 18);
+        g.lineStyle(2, 0xffd36a, 0.35);
+        g.strokeRoundedRect(x - (width / 2) + 9, y - (height / 2) + 9, width - 18, height - 18, 12);
+
+        const cols = Math.max(3, Math.floor(width / 70));
+        const rows = Math.max(2, Math.floor(height / 68));
+        const cellW = width / cols;
+        const cellH = height / rows;
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const treeX = x - (width / 2) + (cellW * (col + 0.5)) + ((row % 2) * 10);
+                const treeY = y - (height / 2) + (cellH * (row + 0.55));
+                this.drawPixelTree(g, treeX, treeY, 0.9 + (((row + col) % 3) * 0.08));
+            }
+        }
+    }
+
+    drawPixelTree(g, x, y, scale = 1) {
+        const trunkW = 10 * scale;
+        const trunkH = 22 * scale;
+        const leaf = 22 * scale;
+        g.fillStyle(0x5c3220, 0.94);
+        g.fillRect(x - (trunkW / 2), y + (leaf * 0.32), trunkW, trunkH);
+        g.fillStyle(0x2ed46f, 0.95);
+        g.fillRect(x - leaf, y - (leaf * 0.25), leaf * 2, leaf * 0.9);
+        g.fillStyle(0x167d4d, 0.96);
+        g.fillRect(x - (leaf * 0.72), y - leaf, leaf * 1.45, leaf * 0.95);
+        g.fillStyle(0x83f28f, 0.78);
+        g.fillRect(x - (leaf * 0.42), y - (leaf * 1.18), leaf * 0.84, leaf * 0.48);
+        g.fillStyle(0xff6fdf, 0.34);
+        g.fillRect(x + (leaf * 0.34), y - (leaf * 0.55), leaf * 0.28, leaf * 0.28);
     }
 
     createPlayer() {
@@ -5767,9 +5926,9 @@ class GameScene extends Phaser.Scene {
         const activeEnemies = this.enemies.children.entries.filter(enemy => enemy.active).length;
         if (activeEnemies >= this.maxActiveEnemies) return;
 
-        const topGate = (this.enemiesSpawnedThisWave % 2) === 0;
-        const x = (this.worldWidth / 2) + Phaser.Math.Between(-135, 135);
-        const y = topGate ? -42 : this.worldHeight + 42;
+        const leftGate = (this.enemiesSpawnedThisWave % 2) === 0;
+        const x = leftGate ? -42 : this.worldWidth + 42;
+        const y = (this.worldHeight / 2) + Phaser.Math.Between(-135, 135);
 
         const isThrower = GameState.wave >= 5 && (this.enemiesSpawnedThisWave + 1) % 6 === 0;
         this.createEnemyAt(x, y, isThrower);

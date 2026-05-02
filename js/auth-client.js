@@ -191,6 +191,13 @@
         });
     }
 
+    async function startMultiplayerRoom(code, playerId) {
+        return request(`/multiplayer/rooms/${encodeURIComponent(String(code || '').trim().toUpperCase())}/start`, {
+            method: 'POST',
+            body: JSON.stringify({ playerId })
+        });
+    }
+
     function encodeSaveCode(payload) {
         const json = JSON.stringify(payload);
         return btoa(unescape(encodeURIComponent(json)));
@@ -331,6 +338,7 @@
         joinMultiplayerRoom,
         fetchMultiplayerRoom,
         sendMultiplayerState,
+        startMultiplayerRoom,
         exportSaveCode,
         importSaveCode,
         setProfileToolsVisible
