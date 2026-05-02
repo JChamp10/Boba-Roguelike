@@ -30,6 +30,11 @@
                 radial-gradient(circle at 18% 10%, color-mix(in srgb, var(--boba-aqua) 20%, transparent), transparent 32%),
                 radial-gradient(circle at 82% 88%, color-mix(in srgb, var(--boba-pink) 18%, transparent), transparent 34%),
                 linear-gradient(135deg, #05070d, var(--boba-bg) 54%, #090713);
+            color: var(--boba-cream);
+            font-family: Arial, Helvetica, sans-serif;
+            font-weight: 800;
+            text-rendering: geometricPrecision;
+            -webkit-font-smoothing: antialiased;
         }
         body {
             min-height: 100dvh;
@@ -63,6 +68,7 @@
             font-family: Arial, sans-serif;
             font-weight: 800;
             letter-spacing: 1px;
+            text-shadow: 0 3px 0 #000, 0 0 18px rgba(88, 221, 255, 0.34);
             background: var(--boba-bg);
             z-index: 10;
         }
@@ -79,6 +85,7 @@
             align-items: end;
             color: var(--boba-cream);
             font-family: Arial, sans-serif;
+            text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65);
             pointer-events: auto;
             padding: 12px;
             border: 2px solid var(--boba-aqua);
@@ -110,6 +117,8 @@
             min-height: 38px;
             padding: 0 10px;
             font-weight: 900;
+            font-size: 14px;
+            text-shadow: 0 2px 0 #000;
         }
         .cheat-code-box {
             display: grid;
@@ -131,6 +140,8 @@
             background: rgba(13, 32, 48, 0.90);
             outline: none;
             font-weight: 900;
+            font-size: 13px;
+            text-shadow: 0 2px 0 #000;
             box-shadow: 0 0 18px rgba(255, 216, 111, 0.12);
         }
         #profile-tools button,
@@ -142,6 +153,8 @@
             color: var(--boba-cream);
             background: rgba(22, 62, 88, 0.90);
             font-weight: 900;
+            font-size: 12px;
+            text-shadow: 0 2px 0 rgba(0, 0, 0, 0.72);
             cursor: pointer;
             transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
         }
@@ -161,6 +174,7 @@
             color: var(--boba-green);
             font-size: 11px;
             font-weight: 800;
+            text-shadow: 0 2px 0 #000;
         }
         #profile-message[data-state="bad"] {
             color: var(--boba-danger);
@@ -174,6 +188,7 @@
             padding: 18px;
             color: var(--boba-cream);
             font-family: Arial, sans-serif;
+            text-shadow: 0 2px 0 #000;
             background: rgba(3, 6, 12, 0.52);
         }
         #save-code-panel.hidden {

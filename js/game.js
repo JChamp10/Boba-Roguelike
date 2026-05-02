@@ -928,9 +928,44 @@ function resetCanvasInput(scene) {
     canvas.style.cursor = '';
 }
 
+function getReadableFontSize(fontSize) {
+    const size = Number.parseFloat(String(fontSize || ''));
+    if (!Number.isFinite(size)) return fontSize;
+    if (size <= 8) return '10px';
+    if (size <= 10) return '11px';
+    if (size <= 12) return `${size + 1}px`;
+    return fontSize;
+}
+
+function installReadableText(scene) {
+    if (!scene?.add?.text || scene.__bobaReadableTextInstalled) return;
+    scene.__bobaReadableTextInstalled = true;
+    const originalText = scene.add.text.bind(scene.add);
+    scene.add.text = (x, y, text, style = {}) => {
+        const sourceStyle = style && typeof style === 'object' ? style : {};
+        const nextStyle = {
+            fontFamily: sourceStyle.fontFamily || 'Arial Black',
+            ...sourceStyle
+        };
+        nextStyle.fontSize = getReadableFontSize(nextStyle.fontSize);
+        if (nextStyle.stroke === undefined && nextStyle.strokeThickness === undefined) {
+            nextStyle.stroke = '#06101a';
+            const size = Number.parseFloat(String(nextStyle.fontSize || '12'));
+            nextStyle.strokeThickness = size >= 24 ? 6 : size >= 16 ? 4 : 3;
+        }
+        const node = originalText(x, y, text, nextStyle);
+        node.setResolution?.(2);
+        if (!sourceStyle.shadow) {
+            node.setShadow?.(1, 2, 'rgba(0,0,0,0.62)', 0, true, true);
+        }
+        return node;
+    };
+}
+
 const RUN_SCENE_KEYS = ['GameScene', 'PauseScene', 'UpgradeScene', 'FactoryScene', 'GameOverScene'];
 
 function resetRunUiState(scene) {
+    installReadableText(scene);
     globalThis.__bobaSceneTransitioning = false;
     resetCanvasInput(scene);
     GameState.paused = false;
@@ -1073,6 +1108,7 @@ function clearMultiplayerSession() {
 }
 
 function drawSceneBackdrop(scene, accentColor = 0x2b3357) {
+    installReadableText(scene);
     scene.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x07070c);
     if (scene.textures.exists('menu_background')) {
         const bg = scene.add.image(GAME_CENTER_X, GAME_CENTER_Y, 'menu_background').setDepth(0);
